@@ -1,0 +1,16 @@
+[general]
+name=Databricks DBSQL Connector
+qgisMinimumVersion=3.16
+description=Connect QGIS to Databricks SQL warehouses and access geospatial data directly
+version=1.0.0
+author=Danny Wong
+email=danny.wong@databricks.com
+about=This plugin provides direct connectivity to Databricks SQL warehouses, allowing you to load and display geospatial data from Unity Catalog tables in QGIS. Supports GEOGRAPHY and GEOMETRY data types with WKT/WKB formats.
+tracker=https://github.com/yourusername/qgis-databricks-connector
+repository=https://github.com/yourusername/qgis-databricks-connector
+tags=databricks,sql,vector,geospatial,unity catalog
+homepage=https://github.com/yourusername/qgis-databricks-connector
+category=Vector
+experimental=False
+deprecated=False
+server=False
