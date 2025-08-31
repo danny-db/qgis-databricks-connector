@@ -2,6 +2,8 @@
 
 A QGIS plugin that provides direct connectivity to Databricks SQL warehouses, allowing you to load and display geospatial data from Unity Catalog tables directly in QGIS.
 
+Walkthrough: https://www.youtube.com/watch?v=M5ZvVWpZnQY
+
 ## Features
 
 - **Direct Databricks SQL Connection**: Connect directly to Databricks SQL warehouses using personal access tokens.  Connect to serverless SQL for the best performance.
