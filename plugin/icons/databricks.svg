@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle -->
+  <circle cx="12" cy="12" r="11" fill="#FF3621" stroke="#E8332A" stroke-width="1"/>
+  
+  <!-- Data blocks representing analytics/data processing -->
+  <rect x="5" y="8" width="4" height="2" fill="white" rx="0.5"/>
+  <rect x="5" y="11" width="6" height="2" fill="white" rx="0.5"/>
+  <rect x="5" y="14" width="3" height="2" fill="white" rx="0.5"/>
+  
+  <!-- Arrow/connection lines -->
+  <path d="M11 9 L15 9" stroke="white" stroke-width="1.5" fill="none"/>
+  <path d="M13 12 L17 12" stroke="white" stroke-width="1.5" fill="none"/>
+  <path d="M10 15 L14 15" stroke="white" stroke-width="1.5" fill="none"/>
+  
+  <!-- Processing/analytics symbol -->
+  <circle cx="17" cy="9" r="1.5" fill="white"/>
+  <circle cx="19" cy="12" r="1.5" fill="white"/>
+  <circle cx="16" cy="15" r="1.5" fill="white"/>
+  
+  <!-- Small "D" for Databricks -->
+  <text x="12" y="7" font-family="Arial" font-size="5" font-weight="bold" fill="white" text-anchor="middle">D</text>
+</svg>

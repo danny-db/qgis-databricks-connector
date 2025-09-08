@@ -10,7 +10,8 @@ from qgis.core import (
     QgsProviderRegistry,
     QgsProviderMetadata,
     QgsMessageLog,
-    Qgis
+    Qgis,
+    QgsDataItemProviderRegistry
 )
 
 # Check if databricks is available
@@ -20,6 +21,10 @@ try:
 except ImportError as e:
     DATABRICKS_AVAILABLE = False
     IMPORT_ERROR = str(e)
+
+# Browser provider will be imported when needed
+BROWSER_AVAILABLE = True  # Assume it's available, import when needed
+BROWSER_IMPORT_ERROR = None
 
 from .databricks_dialog import DatabricksDialog
 
@@ -62,6 +67,9 @@ class DatabricksConnector:
         
         # Provider metadata instance
         self.provider_metadata = None
+        
+        # Browser provider instance
+        self.browser_provider = None
 
     def tr(self, message):
         """Get the translation for a string using Qt translation API."""
@@ -126,13 +134,23 @@ class DatabricksConnector:
                 Qgis.Warning
             )
         
+        # Register the browser provider
+        if BROWSER_AVAILABLE:
+            self.register_browser_provider()
+        else:
+            QgsMessageLog.logMessage(
+                f"Databricks browser provider not available: {BROWSER_IMPORT_ERROR}",
+                "Databricks Connector",
+                Qgis.Warning
+            )
+        
         # Will be set False in run()
         self.first_start = True
 
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""
         
-        # Safely unregister the provider - compatible with different QGIS versions
+        # Safely unregister the data provider - compatible with different QGIS versions
         if self.provider_metadata and DATABRICKS_AVAILABLE:
             try:
                 registry = QgsProviderRegistry.instance()
@@ -152,6 +170,30 @@ class DatabricksConnector:
             except Exception as e:
                 QgsMessageLog.logMessage(
                     f"Error unregistering provider: {str(e)}",
+                    "Databricks Connector",
+                    Qgis.Warning
+                )
+        
+        # Unregister the browser provider
+        if self.browser_provider and BROWSER_AVAILABLE:
+            try:
+                # Unregister provider - version compatible
+                try:
+                    # Try newer QGIS version method first
+                    registry = QgsDataItemProviderRegistry.instance()
+                except AttributeError:
+                    # Fall back to older QGIS version method
+                    registry = QgsApplication.dataItemProviderRegistry()
+                
+                registry.removeProvider(self.browser_provider)
+                QgsMessageLog.logMessage(
+                    "Databricks browser provider unregistered successfully",
+                    "Databricks Connector",
+                    Qgis.Info
+                )
+            except Exception as e:
+                QgsMessageLog.logMessage(
+                    f"Error unregistering browser provider: {str(e)}",
                     "Databricks Connector",
                     Qgis.Warning
                 )
@@ -184,6 +226,41 @@ class DatabricksConnector:
                 "Databricks Connector",
                 Qgis.Critical
             )
+    
+    def register_browser_provider(self):
+        """Register the Databricks browser provider."""
+        try:
+            # Import browser provider when needed (within QGIS context)
+            from .databricks_browser import DatabricksDataItemProvider
+            
+            # Create browser provider
+            self.browser_provider = DatabricksDataItemProvider()
+            
+            # Register the provider - version compatible
+            try:
+                # Try newer QGIS version method first
+                registry = QgsDataItemProviderRegistry.instance()
+            except AttributeError:
+                # Fall back to older QGIS version method
+                registry = QgsApplication.dataItemProviderRegistry()
+            
+            registry.addProvider(self.browser_provider)
+            
+            QgsMessageLog.logMessage(
+                "Databricks browser provider registered successfully",
+                "Databricks Connector",
+                Qgis.Info
+            )
+            
+        except Exception as e:
+            QgsMessageLog.logMessage(
+                f"Failed to register Databricks browser provider: {str(e)}",
+                "Databricks Connector",
+                Qgis.Critical
+            )
+            global BROWSER_AVAILABLE, BROWSER_IMPORT_ERROR
+            BROWSER_AVAILABLE = False
+            BROWSER_IMPORT_ERROR = str(e)
 
     def run(self):
         """Run method that performs all the real work"""

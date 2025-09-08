@@ -182,6 +182,7 @@ def install_plugin():
         'databricks_connector.py',
         'databricks_provider.py',
         'databricks_dialog.py',
+        'databricks_browser.py',
         'README.md',
         'requirements.txt'
     ]
@@ -214,8 +215,22 @@ def install_plugin():
         else:
             print(f"✗ File not found: {file}")
     
+    # Copy custom icons directory
+    icons_src = current_dir / 'icons'
+    if icons_src.exists() and icons_src.is_dir():
+        try:
+            icons_dest = target_dir / 'icons'
+            shutil.copytree(icons_src, icons_dest)
+            icon_count = len(list(icons_dest.glob('*.svg')))
+            print(f"✓ Copied custom icons directory ({icon_count} SVG files)")
+            copied_files += 1
+        except Exception as e:
+            print(f"✗ Failed to copy icons directory: {e}")
+    else:
+        print(f"✗ Icons directory not found: {icons_src}")
+    
     print(f"Plugin installed to: {target_dir}")
-    print(f"Copied {copied_files} files")
+    print(f"Copied {copied_files} files/directories")
     return copied_files > 0
 
 

@@ -102,6 +102,9 @@ class DatabricksProvider(QgsVectorDataProvider):
     def __init__(self, uri: str = '', options=None, flags=None):
         super().__init__(uri, options or QgsDataProvider.ProviderOptions(), flags or Qgis.DataProviderReadFlags())
         
+        # Store the original URI for persistence
+        self.uri_string = uri
+        
         # Parse URI components
         self._parse_uri(uri)
         
@@ -121,7 +124,7 @@ class DatabricksProvider(QgsVectorDataProvider):
     def _parse_uri(self, uri: str):
         """Parse the URI string to extract connection parameters"""
         # URI format: 
-        # databricks://hostname:port/http_path?access_token=token&table=schema.table&geom_column=geometry
+        # databricks://hostname:port/http_path?access_token=token&table=catalog.schema.table&geom_column=geometry
         
         self.hostname = ''
         self.port = 443
@@ -129,49 +132,46 @@ class DatabricksProvider(QgsVectorDataProvider):
         self.access_token = ''
         self.table_name = ''
         self.schema_name = ''
+        self.catalog_name = ''
         self.geometry_column_name = 'geometry'
         
         if not uri.startswith('databricks://'):
             return
         
-        # Simple URI parsing (in production, use urllib.parse)
         try:
-            # Remove protocol
-            uri_parts = uri.replace('databricks://', '').split('?')
-            base_part = uri_parts[0]
-            params_part = uri_parts[1] if len(uri_parts) > 1 else ''
+            import urllib.parse
             
-            # Parse base: hostname:port/http_path
-            if '/' in base_part:
-                host_port, self.http_path = base_part.split('/', 1)
-                self.http_path = '/' + self.http_path
-            else:
-                host_port = base_part
+            # Parse the URI properly
+            parsed = urllib.parse.urlparse(uri)
             
-            if ':' in host_port:
-                self.hostname, port_str = host_port.split(':')
-                self.port = int(port_str)
-            else:
-                self.hostname = host_port
+            # Extract hostname and port
+            self.hostname = parsed.hostname or ''
+            self.port = parsed.port or 443
             
-            # Parse parameters
-            if params_part:
-                for param in params_part.split('&'):
-                    if '=' in param:
-                        key, value = param.split('=', 1)
-                        if key == 'access_token':
-                            self.access_token = value
-                        elif key == 'table':
-                            if '.' in value:
-                                self.schema_name, self.table_name = value.split('.', 1)
-                            else:
-                                self.table_name = value
-                        elif key == 'geom_column':
-                            self.geometry_column_name = value
+            # Extract HTTP path
+            self.http_path = parsed.path or ''
+            
+            # Parse query parameters
+            params = urllib.parse.parse_qs(parsed.query)
+            
+            if 'access_token' in params:
+                self.access_token = params['access_token'][0]
+            
+            if 'table' in params:
+                table_parts = params['table'][0].split('.')
+                if len(table_parts) == 3:
+                    self.catalog_name, self.schema_name, self.table_name = table_parts
+                elif len(table_parts) == 2:
+                    self.schema_name, self.table_name = table_parts
+                else:
+                    self.table_name = table_parts[0]
+            
+            if 'geom_column' in params:
+                self.geometry_column_name = params['geom_column'][0]
                             
         except Exception as e:
             QgsMessageLog.logMessage(
-                f"Error parsing URI: {str(e)}",
+                f"Error parsing URI: {str(e)} - URI: {uri}",
                 "Databricks Provider",
                 Qgis.Warning
             )
@@ -208,8 +208,15 @@ class DatabricksProvider(QgsVectorDataProvider):
             
         try:
             with self.connection.cursor() as cursor:
-                # Get table schema
-                table_ref = f"{self.schema_name}.{self.table_name}" if self.schema_name else self.table_name
+                # Get table schema - construct full table reference
+                table_parts = []
+                if self.catalog_name:
+                    table_parts.append(self.catalog_name)
+                if self.schema_name:
+                    table_parts.append(self.schema_name)
+                table_parts.append(self.table_name)
+                table_ref = '.'.join(table_parts)
+                
                 cursor.execute(f"DESCRIBE {table_ref}")
                 schema_info = cursor.fetchall()
                 
@@ -361,6 +368,10 @@ class DatabricksProvider(QgsVectorDataProvider):
         """Return provider description"""
         return self.PROVIDER_DESCRIPTION
     
+    def dataSourceUri(self, expandAuthConfig: bool = False) -> str:
+        """Return the data source URI"""
+        return self.uri_string
+    
     def crs(self) -> QgsCoordinateReferenceSystem:
         """Return coordinate reference system"""
         return QgsCoordinateReferenceSystem("EPSG:4326")  # Assume WGS84
@@ -372,8 +383,14 @@ class DatabricksProvider(QgsVectorDataProvider):
         
         try:
             with self.connection.cursor() as cursor:
-                # Build query based on request
-                table_ref = f"{self.schema_name}.{self.table_name}" if self.schema_name else self.table_name
+                # Build query based on request - construct full table reference  
+                table_parts = []
+                if self.catalog_name:
+                    table_parts.append(self.catalog_name)
+                if self.schema_name:
+                    table_parts.append(self.schema_name)
+                table_parts.append(self.table_name)
+                table_ref = '.'.join(table_parts)
                 
                 # Select fields
                 field_names = [field.name() for field in self.fields_cache]
