@@ -149,3 +149,7 @@ databricks_connector/
 - `DatabricksDialog`: Connection and table selection UI
 - `LayerLoadingThread`: Async data loading with progress
 
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
