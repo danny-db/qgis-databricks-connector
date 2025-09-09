@@ -87,10 +87,8 @@ def install_dependencies():
     # Find QGIS Python executable
     python_exe = get_qgis_python_executable()
     if not python_exe:
-        print("Could not find QGIS Python executable. Try manual installation:")
-        print("1. Open QGIS Python Console (Plugins → Python Console)")
-        print("2. Run: import subprocess, sys")
-        print("3. Run: subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'databricks-sql-connector', 'shapely'])")
+        print("Could not find QGIS Python executable. Skipping automatic installation.")
+        print_manual_install_instructions()
         return False
     
     print(f"Using Python: {python_exe}")
@@ -102,21 +100,55 @@ def install_dependencies():
     
     for dep in dependencies:
         try:
-            # Handle .bat files differently
+            # Try different methods based on the Python executable type
             if python_exe.endswith('.bat'):
-                # For python-qgis.bat, we need to use a different approach
-                cmd = [python_exe, '-c', f'import subprocess, sys; subprocess.check_call([sys.executable, "-m", "pip", "install", "{dep}"])']
+                # Method 1: Try using python-qgis.bat directly with pip
+                try:
+                    cmd = [python_exe, '-m', 'pip', 'install', dep]
+                    subprocess.check_call(cmd, shell=False, creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0)
+                    print(f"✓ Installed {dep}")
+                    continue
+                except:
+                    pass
+                
+                # Method 2: Try using OSGeo4W shell
+                try:
+                    osgeo_shell = python_exe.replace('python-qgis.bat', 'o4w_env.bat')
+                    if os.path.exists(osgeo_shell):
+                        cmd = [osgeo_shell, '&&', 'pip', 'install', dep]
+                        subprocess.check_call(' '.join(cmd), shell=True)
+                        print(f"✓ Installed {dep}")
+                        continue
+                except:
+                    pass
             else:
+                # Regular python executable
                 cmd = [python_exe, '-m', 'pip', 'install', dep]
+                subprocess.check_call(cmd)
+                print(f"✓ Installed {dep}")
+                continue
+                
+            # If we get here, all methods failed
+            raise Exception("All installation methods failed")
             
-            subprocess.check_call(cmd, shell=True if sys.platform.startswith('win') else False)
-            print(f"✓ Installed {dep}")
-        except subprocess.CalledProcessError as e:
+        except Exception as e:
             print(f"✗ Failed to install {dep}: {e}")
-            print("Try installing manually in QGIS Python Console")
+            print("Will provide manual installation instructions.")
+            print_manual_install_instructions()
             return False
     
     return True
+
+def print_manual_install_instructions():
+    """Print manual installation instructions"""
+    print("\nTo install dependencies manually:")
+    print("1. Open QGIS")
+    print("2. Go to Plugins → Python Console")
+    print("3. Run these commands:")
+    print("   import subprocess, sys")
+    print("   subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'databricks-sql-connector'])")
+    print("   subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'shapely'])")
+    print("4. Restart QGIS")
 
 
 def get_qgis_plugin_directory():
@@ -183,7 +215,7 @@ def install_plugin():
         'databricks_provider.py',
         'databricks_dialog.py',
         'databricks_browser.py',
-        'README.md',
+        '../README.md',
         'requirements.txt'
     ]
     
@@ -270,19 +302,13 @@ def main():
         print("4. Click the Databricks icon in the toolbar to connect")
     else:
         print("⚠ Plugin installed but dependencies may be missing.")
-        print("\nTo install dependencies manually:")
-        print("1. Open QGIS")
-        print("2. Go to Plugins → Python Console")
-        print("3. Run these commands:")
-        print("   import subprocess, sys")
-        print("   subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'databricks-sql-connector'])")
-        print("   subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'shapely'])")
-        print("4. Restart QGIS")
+        print_manual_install_instructions()
         
         if platform == "Windows":
             print("\nWindows-specific notes:")
             print("- If you have OSGeo4W installation, you may need to run the OSGeo4W Shell as Administrator")
             print("- Some Windows installations require using the QGIS Python Console method")
+            print("- You can also try installing dependencies after QGIS is running")
     
     return True
 
