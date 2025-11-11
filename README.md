@@ -16,7 +16,7 @@ Walkthrough: https://www.youtube.com/watch?v=M5ZvVWpZnQY
 ## Requirements
 
 ### QGIS Version
-- Tested QGIS 3.42.1 on Mac
+- Tested QGIS 3.42.1 on Mac and Windows
 
 ### Python Dependencies
 - `databricks-sql-connector>=3.5.0`
@@ -35,11 +35,11 @@ Walkthrough: https://www.youtube.com/watch?v=M5ZvVWpZnQY
 1. **Download the plugin files** to a local directory
 2. **Run the installation script**:
    ```bash
-   # For macOS (tested)
+   # For macOS 
    python3 install_macos.py
    
-   # For Windows/Linux (not tested)
-   python3 install.py
+   # For Windows
+   python3 install_windows.py
    ```
 3. **Restart QGIS**
 4. **Enable the plugin**:
@@ -128,26 +128,6 @@ The plugin logs detailed information to the QGIS message log:
 1. **Use Max Features limit** to prevent loading very large datasets
 2. **Use Serverless SQL** when possible for the best performance
 3. **Use appropriate SQL warehouse sizes** for your data volumes
-
-## Development
-
-### Plugin Structure
-```
-databricks_connector/
-├── __init__.py                 # Plugin entry point
-├── databricks_connector.py     # Main plugin class
-├── databricks_provider.py      # Data provider implementation  
-├── databricks_dialog.py        # User interface
-├── metadata.txt               # Plugin metadata
-├── requirements.txt           # Python dependencies
-└── README.md                  # This file
-```
-
-### Key Classes
-- `DatabricksConnector`: Main plugin class
-- `DatabricksProvider`: QGIS data provider for direct integration
-- `DatabricksDialog`: Connection and table selection UI
-- `LayerLoadingThread`: Async data loading with progress
 
 ## License
 
