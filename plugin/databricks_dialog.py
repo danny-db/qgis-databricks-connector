@@ -106,7 +106,7 @@ class TableDiscoveryThread(QThread):
                     table_name,
                     column_name,
                     data_type
-                FROM information_schema.columns 
+                FROM system.information_schema.columns 
                 WHERE data_type IN ('GEOGRAPHY', 'GEOMETRY')
                 ORDER BY table_catalog, table_schema, table_name
                 """
@@ -1532,7 +1532,7 @@ class DatabaseStructureThread(QThread):
                         table_name,
                         column_name,
                         data_type
-                    FROM information_schema.columns 
+                    FROM system.information_schema.columns 
                     WHERE table_catalog IS NOT NULL 
                         AND table_schema IS NOT NULL
                         AND table_name IS NOT NULL
@@ -2467,7 +2467,7 @@ class QueryLayerCreationThread(QThread):
                     
                     info_query = f"""
                         SELECT column_name, data_type
-                        FROM information_schema.columns 
+                        FROM system.information_schema.columns 
                         WHERE {where_clause}
                         AND data_type IN ('GEOGRAPHY', 'GEOMETRY')
                     """
