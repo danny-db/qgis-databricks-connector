@@ -84,10 +84,9 @@ class DatabricksConnectionItem(QgsDataCollectionItem):
             with connection.cursor() as cursor:
                 # Use information_schema like the working custom query dialog
                 info_query = """
-                    SELECT DISTINCT table_catalog
-                    FROM system.information_schema.columns 
-                    WHERE table_catalog IS NOT NULL 
-                    ORDER BY table_catalog
+                    SELECT DISTINCT catalog_name
+                    FROM system.information_schema.catalogs
+                    ORDER BY catalog_name
                 """
                 
                 QgsMessageLog.logMessage(
