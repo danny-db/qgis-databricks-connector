@@ -85,7 +85,7 @@ class DatabricksConnectionItem(QgsDataCollectionItem):
                 # Use information_schema like the working custom query dialog
                 info_query = """
                     SELECT DISTINCT table_catalog
-                    FROM information_schema.columns 
+                    FROM system.information_schema.columns 
                     WHERE table_catalog IS NOT NULL 
                     ORDER BY table_catalog
                 """
