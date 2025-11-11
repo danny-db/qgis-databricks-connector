@@ -52,12 +52,14 @@ class DatabricksConnectionItem(QgsDataCollectionItem):
             catalogs = self._get_catalogs()
             children = []
             
+            # Add all catalogs first (these come sorted alphabetically from the query)
             for catalog in catalogs:
                 catalog_item = DatabricksCatalogItem(self, catalog, self.connection_config)
                 children.append(catalog_item)
             
-            # Add custom query option
-            query_item = DatabricksQueryItem(self, "Custom Query", self.connection_config)
+            # Add custom query option at the end (after all catalogs)
+            # Using a special name prefix to ensure it sorts to the bottom
+            query_item = DatabricksQueryItem(self, "⚡ Custom Query", self.connection_config)
             children.append(query_item)
             
             return children
@@ -192,18 +194,31 @@ class DatabricksCatalogItem(QgsDataCollectionItem):
             )
             
             with connection.cursor() as cursor:
-                # Use information_schema like the working custom query dialog
+                # Use system.information_schema.schemata to get all accessible schemas
+                # This is more reliable than querying columns table
                 info_query = f"""
-                    SELECT DISTINCT table_schema
-                    FROM information_schema.columns 
-                    WHERE table_catalog = '{self.catalog_name}'
-                        AND table_schema IS NOT NULL 
-                    ORDER BY table_schema
+                    SELECT DISTINCT schema_name
+                    FROM system.information_schema.schemata
+                    WHERE catalog_name = '{self.catalog_name}'
+                        AND schema_name IS NOT NULL 
+                    ORDER BY schema_name
                 """
+                
+                QgsMessageLog.logMessage(
+                    f"Browser: Querying schemas for catalog '{self.catalog_name}' with: {info_query}",
+                    "Databricks Browser",
+                    Qgis.Info
+                )
                 
                 cursor.execute(info_query)
                 results = cursor.fetchall()
                 schemas = [row[0] for row in results if row[0]]
+                
+                QgsMessageLog.logMessage(
+                    f"Browser: Found {len(schemas)} schemas in catalog '{self.catalog_name}': {schemas}",
+                    "Databricks Browser",
+                    Qgis.Info
+                )
             
             connection.close()
             return schemas
@@ -260,7 +275,7 @@ class DatabricksSchemaItem(QgsDataCollectionItem):
             return [error_item]
     
     def _get_tables(self):
-        """Get list of tables in this schema with geometry information using information_schema (same as custom query dialog)"""
+        """Get list of tables in this schema with geometry information using system.information_schema"""
         try:
             connection = sql.connect(
                 server_hostname=self.connection_config['hostname'],
@@ -268,48 +283,89 @@ class DatabricksSchemaItem(QgsDataCollectionItem):
                 access_token=self.connection_config['access_token']
             )
             
-            tables = {}  # Use dict to group columns by table
+            tables = {}  # Use dict to store table information
             
             with connection.cursor() as cursor:
-                # Use information_schema like the working custom query dialog
-                info_query = f"""
-                    SELECT DISTINCT table_name, column_name, data_type
-                    FROM information_schema.columns 
+                # First, get all accessible tables using system.information_schema.tables
+                tables_query = f"""
+                    SELECT DISTINCT table_name
+                    FROM system.information_schema.tables
                     WHERE table_catalog = '{self.catalog_name}'
                         AND table_schema = '{self.schema_name}'
-                        AND table_name IS NOT NULL 
-                    ORDER BY table_name, column_name
+                        AND table_name IS NOT NULL
+                    ORDER BY table_name
                 """
                 
-                cursor.execute(info_query)
-                results = cursor.fetchall()
+                QgsMessageLog.logMessage(
+                    f"Browser: Querying tables for {self.catalog_name}.{self.schema_name} with: {tables_query}",
+                    "Databricks Browser",
+                    Qgis.Info
+                )
                 
-                # Group results by table and identify geometry columns
-                for row in results:
+                cursor.execute(tables_query)
+                table_results = cursor.fetchall()
+                
+                # Initialize all tables
+                for row in table_results:
                     table_name = row[0]
-                    column_name = row[1]
-                    data_type = row[2]
+                    tables[table_name] = {
+                        'table_name': table_name,
+                        'geometry_column': None,
+                        'geometry_type': None,
+                        'has_geometry': False
+                    }
+                
+                QgsMessageLog.logMessage(
+                    f"Browser: Found {len(tables)} tables in {self.catalog_name}.{self.schema_name}",
+                    "Databricks Browser",
+                    Qgis.Info
+                )
+                
+                # Now check for geometry columns using system.information_schema.columns
+                if tables:
+                    columns_query = f"""
+                        SELECT table_name, column_name, data_type
+                        FROM system.information_schema.columns 
+                        WHERE table_catalog = '{self.catalog_name}'
+                            AND table_schema = '{self.schema_name}'
+                            AND table_name IS NOT NULL 
+                            AND data_type IN ('GEOMETRY', 'GEOGRAPHY')
+                        ORDER BY table_name, column_name
+                    """
                     
-                    if table_name not in tables:
-                        tables[table_name] = {
-                            'table_name': table_name,
-                            'geometry_column': None,
-                            'geometry_type': None,
-                            'has_geometry': False
-                        }
+                    QgsMessageLog.logMessage(
+                        f"Browser: Querying geometry columns with: {columns_query}",
+                        "Databricks Browser",
+                        Qgis.Info
+                    )
                     
-                    # Check if this is a geometry column
-                    if data_type and data_type.upper() in ['GEOGRAPHY', 'GEOMETRY']:
-                        tables[table_name]['geometry_column'] = column_name
-                        tables[table_name]['geometry_type'] = data_type
-                        tables[table_name]['has_geometry'] = True
+                    cursor.execute(columns_query)
+                    column_results = cursor.fetchall()
+                    
+                    # Update tables with geometry information
+                    for row in column_results:
+                        table_name = row[0]
+                        column_name = row[1]
+                        data_type = row[2]
+                        
+                        if table_name in tables:
+                            tables[table_name]['geometry_column'] = column_name
+                            tables[table_name]['geometry_type'] = data_type
+                            tables[table_name]['has_geometry'] = True
+                    
+                    geom_tables = sum(1 for t in tables.values() if t['has_geometry'])
+                    QgsMessageLog.logMessage(
+                        f"Browser: {geom_tables} out of {len(tables)} tables have geometry columns",
+                        "Databricks Browser",
+                        Qgis.Info
+                    )
             
             connection.close()
             return list(tables.values())
             
         except Exception as e:
             QgsMessageLog.logMessage(
-                f"Error getting tables from information_schema: {str(e)}",
+                f"Error getting tables from system.information_schema: {str(e)}",
                 "Databricks Browser",
                 Qgis.Warning
             )
@@ -336,6 +392,22 @@ class DatabricksTableItem(QgsDataCollectionItem):
             # Use standard QGIS table icon  
             self.setIcon(QgsApplication.getThemeIcon('/mIconTable.svg'))
     
+    def _escape_identifier(self, identifier):
+        """Escape identifier with backticks if it contains special characters"""
+        if not identifier:
+            return identifier
+        # Always use backticks for safety, especially if identifier contains hyphens or special chars
+        # Remove existing backticks first to avoid double-escaping
+        identifier = identifier.strip('`')
+        return f"`{identifier}`"
+    
+    def _get_table_reference(self):
+        """Get properly escaped table reference in format catalog.schema.table"""
+        catalog = self._escape_identifier(self.catalog_name)
+        schema = self._escape_identifier(self.schema_name)
+        table = self._escape_identifier(self.table_name)
+        return f"{catalog}.{schema}.{table}"
+    
     def capabilities(self):
         """Return item capabilities"""
         return QgsDataItem.Fertile  # Allow expansion to show schema
@@ -353,7 +425,7 @@ class DatabricksTableItem(QgsDataCollectionItem):
             )
             
             with connection.cursor() as cursor:
-                table_ref = f"{self.catalog_name}.{self.schema_name}.{self.table_name}"
+                table_ref = self._get_table_reference()
                 cursor.execute(f"DESCRIBE {table_ref}")
                 schema_info = cursor.fetchall()
                 
@@ -449,7 +521,7 @@ class DatabricksTableItem(QgsDataCollectionItem):
             
             with connection.cursor() as cursor:
                 # Get table schema - exclude geometry column from attributes
-                table_ref = f"{self.catalog_name}.{self.schema_name}.{self.table_name}"
+                table_ref = self._get_table_reference()
                 cursor.execute(f"DESCRIBE {table_ref}")
                 schema_info = cursor.fetchall()
                 
@@ -478,10 +550,10 @@ class DatabricksTableItem(QgsDataCollectionItem):
                             fields.append(QgsField(col_name, QVariant.String))
                 
                 # Query data with geometry conversion
-                geometry_sql = f"ST_ASWKT({geometry_column})" if geometry_column else "NULL"
+                geometry_sql = f"ST_ASWKT({self._escape_identifier(geometry_column)})" if geometry_column else "NULL"
                 
-                # Get attribute columns (excluding geometry)
-                attr_columns = [f.name() for f in fields]
+                # Get attribute columns (excluding geometry) - escape them too
+                attr_columns = [self._escape_identifier(f.name()) for f in fields]
                 attr_sql = ", ".join(attr_columns) if attr_columns else "1"
                 
                 data_query = f"""
@@ -615,7 +687,7 @@ class DatabricksTableItem(QgsDataCollectionItem):
     def _view_data(self):
         """View table data in a query dialog"""
         try:
-            full_table_name = f"{self.catalog_name}.{self.schema_name}.{self.table_name}"
+            full_table_name = self._get_table_reference()
             
             dialog = DatabricksQueryDialog(
                 self.connection_config,
