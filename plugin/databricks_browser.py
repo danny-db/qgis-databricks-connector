@@ -467,13 +467,18 @@ class DatabricksTableItem(QgsDataCollectionItem):
         actions = []
         
         if self.table_info['has_geometry']:
-            # Add as layer action
-            add_layer_action = QAction("Add Layer", parent)
-            add_layer_action.triggered.connect(self._add_layer)
-            actions.append(add_layer_action)
+            # Add first 1000 features action
+            add_1000_action = QAction("Add First 1000 Features", parent)
+            add_1000_action.triggered.connect(lambda: self._add_layer(max_features=1000))
+            actions.append(add_1000_action)
             
             # Set as default action for double-click
-            add_layer_action.setData("default")
+            add_1000_action.setData("default")
+            
+            # Add all features action
+            add_all_action = QAction("Add All Features", parent)
+            add_all_action.triggered.connect(lambda: self._add_layer(max_features=0))
+            actions.append(add_all_action)
         
         # View data action (for both geometry and non-geometry tables)
         view_action = QAction("View Data...", parent)
@@ -485,12 +490,16 @@ class DatabricksTableItem(QgsDataCollectionItem):
     def handleDoubleClick(self):
         """Handle double-click on table item"""
         if self.table_info['has_geometry']:
-            self._add_layer()
+            self._add_layer(max_features=1000)  # Default to 1000 on double-click
             return True
         return False
     
-    def _add_layer(self):
-        """Add this table as a layer to QGIS using simplified synchronous approach"""
+    def _add_layer(self, max_features=1000):
+        """Add this table as a layer to QGIS using simplified synchronous approach
+        
+        Args:
+            max_features: Maximum number of features to load. 0 means unlimited.
+        """
         try:
             if not DATABRICKS_AVAILABLE:
                 QgsMessageLog.logMessage(
@@ -504,10 +513,16 @@ class DatabricksTableItem(QgsDataCollectionItem):
             from PyQt5.QtCore import QVariant
             import databricks.sql as sql
             
-            layer_name = f"{self.catalog_name}_{self.schema_name}_{self.table_name}"
+            # Get layer prefix from settings (same setting used by dialog)
+            settings = QSettings()
+            layer_prefix = settings.value("DatabricksConnector/LayerPrefix", "databricks_")
             
+            # Build layer name with prefix
+            layer_name = f"{layer_prefix}{self.table_name}"
+            
+            limit_msg = f"first {max_features} features" if max_features > 0 else "all features"
             QgsMessageLog.logMessage(
-                f"Loading table: {layer_name}",
+                f"Loading table: {layer_name} ({limit_msg})",
                 "Databricks Browser",
                 Qgis.Info
             )
@@ -556,11 +571,21 @@ class DatabricksTableItem(QgsDataCollectionItem):
                 attr_columns = [self._escape_identifier(f.name()) for f in fields]
                 attr_sql = ", ".join(attr_columns) if attr_columns else "1"
                 
+                # Build query with optional LIMIT clause
                 data_query = f"""
                     SELECT {attr_sql}, {geometry_sql} as geometry_wkt
                     FROM {table_ref}
-                    LIMIT 1000
                 """
+                
+                # Add LIMIT clause only if max_features > 0
+                if max_features > 0:
+                    data_query += f"\n                    LIMIT {max_features}"
+                
+                QgsMessageLog.logMessage(
+                    f"Executing query: {data_query}",
+                    "Databricks Browser",
+                    Qgis.Info
+                )
                 
                 cursor.execute(data_query)
                 rows = cursor.fetchall()

@@ -689,11 +689,11 @@ class LayerLoadingThread(QThread):
                 geometry_column = self.table_info['geometry_column']
                 
                 # Query to detect all geometry types in the table
+                # No LIMIT needed since DISTINCT already returns only unique types
                 query = f"""
                 SELECT DISTINCT ST_GEOMETRYTYPE({geometry_column}) as geom_type 
                 FROM {table_ref} 
-                WHERE {geometry_column} IS NOT NULL 
-                LIMIT 10
+                WHERE {geometry_column} IS NOT NULL
                 """
                 
                 QgsMessageLog.logMessage(
@@ -897,7 +897,8 @@ class DatabricksDialog(QDialog):
         
         options_layout.addWidget(QLabel("Max Features:"), 1, 0)
         self.max_features_edit = QLineEdit()
-        self.max_features_edit.setText("1000")
+        self.max_features_edit.setPlaceholderText("Leave empty for all records, or enter a number (e.g., 1000)")
+        self.max_features_edit.setText("")  # Empty by default = unlimited
         options_layout.addWidget(self.max_features_edit, 1, 1)
         
         layout.addWidget(options_group)
@@ -937,6 +938,10 @@ class DatabricksDialog(QDialog):
                 self.saved_connections_combo.addItem(conn_name)
             
             self.settings.endGroup()
+            
+            # Load global layer prefix setting (not connection-specific)
+            layer_prefix = self.settings.value("DatabricksConnector/LayerPrefix", "databricks_")
+            self.layer_prefix_edit.setText(layer_prefix)
             
             # Load last used connection if available
             last_connection = self.settings.value("DatabricksConnector/LastConnection", "")
@@ -989,6 +994,7 @@ class DatabricksDialog(QDialog):
         hostname = self.hostname_edit.text().strip()
         http_path = self.http_path_edit.text().strip()
         access_token = self.access_token_edit.text().strip()
+        layer_prefix = self.layer_prefix_edit.text().strip()
         
         if not connection_name:
             QMessageBox.warning(self, "Missing Information", 
@@ -1011,13 +1017,16 @@ class DatabricksDialog(QDialog):
             # Save as last used connection
             self.settings.setValue("DatabricksConnector/LastConnection", connection_name)
             
+            # Save global layer prefix setting (used by both dialog and browser)
+            self.settings.setValue("DatabricksConnector/LayerPrefix", layer_prefix if layer_prefix else "databricks_")
+            
             # Update dropdown if it's a new connection
             if self.saved_connections_combo.findText(connection_name) < 0:
                 self.saved_connections_combo.addItem(connection_name)
                 self.saved_connections_combo.setCurrentText(connection_name)
             
             QMessageBox.information(self, "Connection Saved", 
-                                  f"Connection '{connection_name}' saved successfully.")
+                                  f"Connection '{connection_name}' saved successfully.\nLayer prefix set to: '{layer_prefix if layer_prefix else 'databricks_'}'")
             
         except Exception as e:
             QMessageBox.critical(self, "Save Failed", 
@@ -1224,10 +1233,15 @@ import sys
         access_token = self.access_token_edit.text().strip()
         layer_prefix = self.layer_prefix_edit.text().strip()
         
-        try:
-            max_features = int(self.max_features_edit.text().strip())
-        except ValueError:
-            max_features = 1000
+        # Parse max_features: empty = 0 (unlimited), otherwise parse as int
+        max_features_text = self.max_features_edit.text().strip()
+        if not max_features_text:
+            max_features = 0  # 0 means no limit
+        else:
+            try:
+                max_features = int(max_features_text)
+            except ValueError:
+                max_features = 0  # Default to unlimited on invalid input
         
         # Load layers one by one
         self.layers_to_load = selected_tables.copy()
@@ -1328,10 +1342,15 @@ import sys
         access_token = self.access_token_edit.text().strip()
         layer_prefix = self.layer_prefix_edit.text().strip()
         
-        try:
-            max_features = int(self.max_features_edit.text().strip())
-        except ValueError:
-            max_features = 1000
+        # Parse max_features: empty = 0 (unlimited), otherwise parse as int
+        max_features_text = self.max_features_edit.text().strip()
+        if not max_features_text:
+            max_features = 0  # 0 means no limit
+        else:
+            try:
+                max_features = int(max_features_text)
+            except ValueError:
+                max_features = 0  # Default to unlimited on invalid input
         
         # Load next layer
         self.load_next_layer(hostname, http_path, access_token, layer_prefix, max_features)
@@ -1347,10 +1366,15 @@ import sys
             access_token = self.access_token_edit.text().strip()
             layer_prefix = self.layer_prefix_edit.text().strip()
             
-            try:
-                max_features = int(self.max_features_edit.text().strip())
-            except ValueError:
-                max_features = 1000
+            # Parse max_features: empty = 0 (unlimited), otherwise parse as int
+            max_features_text = self.max_features_edit.text().strip()
+            if not max_features_text:
+                max_features = 0  # 0 means no limit
+            else:
+                try:
+                    max_features = int(max_features_text)
+                except ValueError:
+                    max_features = 0  # Default to unlimited on invalid input
             
             # Create layers for LineStrings and Polygons
             for geom_type in geometry_types:
@@ -2035,8 +2059,9 @@ class QueryLayerCreationThread(QThread):
                 )
                 
                 # Create layer for this geometry type - SIMPLE VERSION
+                # Use the base layer_name with geometry type suffix
                 layer = self._create_simple_layer(
-                    f"Databricks_Query_{geom_type}", 
+                    f"{self.layer_name}_{geom_type}", 
                     geom_type, 
                     filtered_rows, 
                     fields, 
@@ -2722,8 +2747,14 @@ class DatabricksQueryDialog(QDialog):
         
         # Add as layer controls
         self.layer_name_edit = QLineEdit()
-        self.layer_name_edit.setPlaceholderText("Layer name (optional)")
-        query_controls.addWidget(QLabel("Layer name:"))
+        self.layer_name_edit.setPlaceholderText("Enter prefix (e.g., databricks_)")
+        
+        # Load default layer prefix from settings
+        settings = QSettings()
+        default_prefix = settings.value("DatabricksConnector/LayerPrefix", "databricks_")
+        self.layer_name_edit.setText(default_prefix)
+        
+        query_controls.addWidget(QLabel("Layer Name Prefix:"))
         query_controls.addWidget(self.layer_name_edit)
         
         self.geometry_column_edit = QLineEdit()
@@ -2877,9 +2908,15 @@ class DatabricksQueryDialog(QDialog):
             QMessageBox.warning(self, "No Results", "No query results to add as layer.")
             return
         
-        layer_name = self.layer_name_edit.text().strip()
-        if not layer_name:
-            layer_name = "Databricks_Query_Layer"
+        # Get layer prefix and create layer name
+        layer_prefix = self.layer_name_edit.text().strip()
+        if not layer_prefix:
+            layer_prefix = "databricks_"
+        
+        # Create layer name with prefix + descriptive suffix
+        import datetime
+        timestamp = datetime.datetime.now().strftime("%H%M%S")
+        layer_name = f"{layer_prefix}query_{timestamp}"
         
         geometry_column = self.geometry_column_edit.text().strip() or None
         
