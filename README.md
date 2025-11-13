@@ -17,7 +17,8 @@ Windows installation: https://www.youtube.com/watch?v=zpyWuKZTePQ
 ## Requirements
 
 ### QGIS Version
-- Tested QGIS 3.42.1 on Mac and Windows
+- Tested QGIS 3.42.1 and 3.44.1 on Mac and Windows
+- It should work with other versions too.
 
 ### Python Dependencies
 - `databricks-sql-connector>=3.5.0`
