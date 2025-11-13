@@ -7,12 +7,17 @@ Windows installation: https://www.youtube.com/watch?v=zpyWuKZTePQ
 
 ## Features
 
-- **Direct Databricks SQL Connection**: Connect directly to Databricks SQL warehouses using personal access tokens.  Connect to serverless SQL for the best performance.
+- **Direct Databricks SQL Connection**: Connect directly to Databricks SQL warehouses using personal access tokens. Connect to serverless SQL for the best performance.
 - **Spatial Data Support**: Full support for GEOGRAPHY and GEOMETRY data types 
+- **Multiple Access Methods**: Load data via Dialog, Browser Panel, or Custom Query interface
+- **Browser Panel Integration**: Browse catalogs, schemas, and tables directly in QGIS Browser with context menu actions
+- **Custom SQL Query Support**: Execute any SQL query and add results as layers with automatic geometry detection
 - **Table Discovery**: Automatically discover tables with spatial columns (GEOMETRY, GEOGRAPHY) in your Unity Catalog
 - **Memory Layer Creation**: Load spatial data as QGIS memory layers with full attribute support
-- **Connection Management**: Save and manage multiple Databricks connections
-- **Geometry Type Detection**: Automatic detection of Point, LineString, Polygon, and Multi-geometry types
+- **Connection Management**: Save and manage multiple Databricks connections with persistent settings
+- **Mixed Geometry Handling**: Automatically creates separate layers for different geometry types in the same table
+- **Configurable Layer Naming**: Set custom layer name prefix that applies across all loading methods
+- **Flexible Feature Limits**: Load all records or limit to specific count (default: unlimited)
 
 ## Requirements
 
@@ -21,9 +26,11 @@ Windows installation: https://www.youtube.com/watch?v=zpyWuKZTePQ
 - It should work with other versions too.
 
 ### Python Dependencies
-- `databricks-sql-connector>=3.5.0`
-- `shapely>=2.0.0`
-- `pyproj>=3.6.0` (optional, for advanced projections)
+- `databricks-sql-connector>=3.5.0` (required - for Databricks SQL connectivity)
+- `shapely>=2.0.0` (optional but recommended - for geometry operations)
+- `pyproj>=3.6.0` (optional - for advanced coordinate system projections)
+
+**Note**: QGIS includes built-in WKT parsing, so the plugin works without shapely, but having it installed can improve geometry handling.
 
 ### Databricks Requirements
 - Databricks SQL Warehouse access
@@ -63,9 +70,13 @@ Windows installation: https://www.youtube.com/watch?v=zpyWuKZTePQ
 
 3. **Test the connection** by clicking "Test Connection"
 
-4. **Save the connection** for future use by clicking "Save Connection"
+4. **Configure layer options**:
+   - **Layer Name Prefix**: Custom prefix for layer names (default: "databricks_")
+   - **Max Features**: Leave empty for unlimited, or enter a number to limit (e.g., 1000)
 
-### Loading Spatial Data
+5. **Save the connection** to persist settings by clicking "Save Connection"
+
+### Method 1: Loading via Dialog (Table Discovery)
 
 1. **Discover tables** by clicking "Discover Tables" after a successful connection test
 
@@ -73,28 +84,65 @@ Windows installation: https://www.youtube.com/watch?v=zpyWuKZTePQ
    - Check the boxes next to the tables you want to add to QGIS
    - Review the geometry column and type information
 
-3. **Configure layer options**:
-   - **Layer Name Prefix**: Prefix for layer names in QGIS (default: "databricks_")
-   - **Max Features**: Maximum number of features to load (default: 1000)
+3. **Add layers** by clicking "Add Selected Layers"
+   - Uses the configured layer prefix and max features settings
+   - Automatically creates separate layers for mixed geometry types
 
-4. **Add layers** by clicking "Add Selected Layers"
+### Method 2: Loading via Browser Panel
+
+1. **Open the QGIS Browser Panel** (`View → Panels → Browser`)
+
+2. **Navigate the hierarchy**:
+   - Expand `Databricks` in the browser
+   - Select your saved connection
+   - Browse through Catalogs → Schemas → Tables
+
+3. **Load data** by right-clicking on a spatial table:
+   - **Add First 1000 Features**: Quick preview (default for double-click)
+   - **Add All Features**: Load complete dataset without limit
+   - **View Data...**: Preview data in custom query dialog
+
+### Method 3: Custom SQL Queries
+
+1. **Open Custom Query** from the connection dialog or browser context menu
+
+2. **Browse database structure**:
+   - Tree view shows all accessible catalogs, schemas, and tables
+   - Double-click items to insert into query
+   - 🗺️ icon indicates tables with geometry columns
+
+3. **Write and execute your query**:
+   ```sql
+   SELECT id, name, geometry 
+   FROM catalog.schema.spatial_table 
+   WHERE condition
+   ```
+   - Geometry columns are automatically converted to WKT format
+   - No need to use ST_ASWKT in your queries
+
+4. **Add results as layer**:
+   - Set Layer Name Prefix (uses saved setting by default)
+   - Geometry column is auto-detected or can be specified
+   - Click "Add as Layer" to create QGIS layer
 
 ### Working with the Data
 
 - **Spatial data** is loaded as QGIS memory layers with full geometry support
 - **Attributes** from all non-geometry columns are included
+- **Mixed geometries** are automatically split into separate layers (e.g., Points, LineStrings, Polygons)
+- **Identifier handling**: Tables/columns with hyphens or special characters are properly escaped
 - **Styling** can be applied using standard QGIS symbology tools
 - **Analysis** can be performed using QGIS spatial analysis tools
 
-## Configuration
+## Supported Geometry Types
 
-### Supported Data Types
+The plugin has been tested with the following geometry types:
+- **Point / MultiPoint**
+- **LineString / MultiLineString**
+- **Polygon / MultiPolygon**
+- **Mixed Geometry Tables**: Automatically detected and split into separate layers
 
-### Geometry Types Supported (Tested Point, LineString, Polygon)
-- Point / MultiPoint
-- LineString / MultiLineString  
-- Polygon / MultiPolygon
-- Generic Geometry (auto-detected)
+**Note**: Generic GEOMETRY columns are automatically analyzed to detect the actual geometry types present in the data.
 
 ## Troubleshooting
 
@@ -107,12 +155,14 @@ Windows installation: https://www.youtube.com/watch?v=zpyWuKZTePQ
   - Check network connectivity to Databricks
   - Ensure the SQL warehouse is running.  Use serverless SQL for the best performance.
 
-#### "No spatial tables found"
-- **Cause**: No tables with GEOGRAPHY/GEOMETRY columns in accessible catalogs
+#### "No spatial tables found" or "Empty catalogs/schemas"
+- **Cause**: No tables with GEOGRAPHY/GEOMETRY columns in accessible catalogs, or insufficient permissions
 - **Solution**:
   - Verify you have access to the Unity Catalog
-  - Check that tables have spatial columns
-  - Ensure proper permissions on the tables
+  - Check that tables have GEOMETRY or GEOGRAPHY data type columns
+  - Ensure proper permissions on the catalogs, schemas, and tables
+  - Use Custom Query to test direct SQL access: `SELECT * FROM catalog.schema.table LIMIT 10`
+  - Check QGIS Log Messages for detailed error information
 
 #### "Missing Dependencies"
 - **Cause**: Required Python packages not installed
@@ -127,9 +177,14 @@ The plugin logs detailed information to the QGIS message log:
 
 ### Performance Tips
 
-1. **Use Max Features limit** to prevent loading very large datasets
+1. **Use feature limits for large tables**: 
+   - Browser: Use "Add First 1000 Features" for quick preview
+   - Dialog: Set Max Features to limit records (leave empty for unlimited)
+   - Consider starting with smaller datasets to check geometry and attributes
 2. **Use Serverless SQL** when possible for the best performance
 3. **Use appropriate SQL warehouse sizes** for your data volumes
+4. **Leverage custom queries** to filter data at the source using WHERE clauses
+5. **Check the QGIS Log** (`View → Panels → Log Messages → Databricks Connector`) for detailed operation info
 
 ## License
 
