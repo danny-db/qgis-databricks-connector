@@ -3,8 +3,7 @@ Main plugin class for Databricks DBSQL Connector - QGIS 3.42 Compatible
 """
 import os
 import sys
-import subprocess
-from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, Qt, QThread, pyqtSignal
+from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, Qt, QProcess
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction, QMessageBox, QProgressDialog, QApplication
 from qgis.core import (
@@ -30,44 +29,6 @@ BROWSER_AVAILABLE = True  # Assume it's available, import when needed
 BROWSER_IMPORT_ERROR = None
 
 from .databricks_dialog import DatabricksDialog
-
-
-class DependencyInstallThread(QThread):
-    """Thread for installing Python dependencies without blocking the UI."""
-    
-    finished = pyqtSignal(bool, str)  # success, message
-    progress = pyqtSignal(str)  # status message
-    
-    def __init__(self, packages):
-        super().__init__()
-        self.packages = packages
-    
-    def run(self):
-        """Install the required packages using pip."""
-        try:
-            self.progress.emit("Installing databricks-sql-connector...")
-            
-            # Get the Python executable used by QGIS
-            python_exe = sys.executable
-            
-            # Run pip install
-            result = subprocess.run(
-                [python_exe, '-m', 'pip', 'install'] + self.packages,
-                capture_output=True,
-                text=True,
-                timeout=300  # 5 minute timeout
-            )
-            
-            if result.returncode == 0:
-                self.finished.emit(True, "Dependencies installed successfully!")
-            else:
-                error_msg = result.stderr or result.stdout or "Unknown error"
-                self.finished.emit(False, f"Installation failed:\n{error_msg}")
-                
-        except subprocess.TimeoutExpired:
-            self.finished.emit(False, "Installation timed out after 5 minutes.")
-        except Exception as e:
-            self.finished.emit(False, f"Installation error: {str(e)}")
 
 
 class DatabricksConnector:
@@ -112,9 +73,10 @@ class DatabricksConnector:
         # Browser provider instance
         self.browser_provider = None
         
-        # Installation thread
-        self.install_thread = None
+        # Installation process (QProcess for proper Qt integration)
+        self.install_process = None
         self.progress_dialog = None
+        self.install_output = ""
 
     def tr(self, message):
         """Get the translation for a string using Qt translation API."""
@@ -324,44 +286,75 @@ class DatabricksConnector:
             self._start_installation()
     
     def _start_installation(self):
-        """Start the dependency installation in a background thread."""
+        """Start the dependency installation using QProcess (Qt-native, avoids QGIS conflicts)."""
         # Create progress dialog
         self.progress_dialog = QProgressDialog(
-            "Installing dependencies...",
-            "Cancel",
+            "Installing databricks-sql-connector...\nThis may take a few minutes.",
+            None,  # No cancel button
             0, 0,  # Indeterminate progress
             self.iface.mainWindow()
         )
-        self.progress_dialog.setWindowTitle("Databricks Connector")
+        self.progress_dialog.setWindowTitle("Databricks Connector - Installing Dependencies")
         self.progress_dialog.setWindowModality(Qt.WindowModal)
         self.progress_dialog.setMinimumDuration(0)
-        self.progress_dialog.setCancelButton(None)  # Can't cancel pip easily
+        self.progress_dialog.setMinimumWidth(400)
         self.progress_dialog.show()
-        
-        # Create and start installation thread
-        self.install_thread = DependencyInstallThread(['databricks-sql-connector'])
-        self.install_thread.progress.connect(self._on_install_progress)
-        self.install_thread.finished.connect(self._on_install_finished)
-        self.install_thread.start()
-    
-    def _on_install_progress(self, message):
-        """Update progress dialog with status message."""
-        if self.progress_dialog:
-            self.progress_dialog.setLabelText(message)
         QApplication.processEvents()
+        
+        # Reset output buffer
+        self.install_output = ""
+        
+        # Create QProcess for pip install
+        self.install_process = QProcess(self.iface.mainWindow())
+        self.install_process.setProcessChannelMode(QProcess.MergedChannels)
+        self.install_process.readyReadStandardOutput.connect(self._on_process_output)
+        self.install_process.finished.connect(self._on_process_finished)
+        self.install_process.errorOccurred.connect(self._on_process_error)
+        
+        # Get Python executable and start pip install
+        python_exe = sys.executable
+        self.install_process.start(python_exe, ['-m', 'pip', 'install', 'databricks-sql-connector'])
+        
+        QgsMessageLog.logMessage(
+            f"Starting pip install with: {python_exe} -m pip install databricks-sql-connector",
+            "Databricks Connector",
+            Qgis.Info
+        )
     
-    def _on_install_finished(self, success, message):
+    def _on_process_output(self):
+        """Capture process output."""
+        if self.install_process:
+            output = self.install_process.readAllStandardOutput().data().decode('utf-8', errors='replace')
+            self.install_output += output
+            QgsMessageLog.logMessage(f"pip: {output.strip()}", "Databricks Connector", Qgis.Info)
+    
+    def _on_process_error(self, error):
+        """Handle process error."""
+        error_messages = {
+            QProcess.FailedToStart: "Failed to start pip process. Python executable may be invalid.",
+            QProcess.Crashed: "pip process crashed.",
+            QProcess.Timedout: "pip process timed out.",
+            QProcess.WriteError: "Error writing to pip process.",
+            QProcess.ReadError: "Error reading from pip process.",
+            QProcess.UnknownError: "Unknown error occurred."
+        }
+        error_msg = error_messages.get(error, f"Process error: {error}")
+        QgsMessageLog.logMessage(f"Installation error: {error_msg}", "Databricks Connector", Qgis.Warning)
+    
+    def _on_process_finished(self, exit_code, exit_status):
         """Handle installation completion."""
         # Close progress dialog
         if self.progress_dialog:
             self.progress_dialog.close()
             self.progress_dialog = None
         
+        success = (exit_code == 0 and exit_status == QProcess.NormalExit)
+        
         if success:
             QMessageBox.information(
                 self.iface.mainWindow(),
                 "Databricks Connector - Installation Complete",
-                f"{message}\n\n"
+                "Dependencies installed successfully!\n\n"
                 "Please restart QGIS to use the Databricks Connector.\n\n"
                 "After restarting, click the Databricks icon to connect."
             )
@@ -371,10 +364,15 @@ class DatabricksConnector:
                 Qgis.Success
             )
         else:
+            # Get last few lines of output for error message
+            error_lines = self.install_output.strip().split('\n')[-5:]
+            error_summary = '\n'.join(error_lines) if error_lines else "No output captured"
+            
             QMessageBox.warning(
                 self.iface.mainWindow(),
                 "Databricks Connector - Installation Failed",
-                f"{message}\n\n"
+                f"Installation failed (exit code: {exit_code}).\n\n"
+                f"Last output:\n{error_summary}\n\n"
                 "You can try installing manually:\n"
                 "1. Open QGIS Python Console (Plugins → Python Console)\n"
                 "2. Run: import subprocess, sys\n"
@@ -382,13 +380,14 @@ class DatabricksConnector:
                 "4. Restart QGIS"
             )
             QgsMessageLog.logMessage(
-                f"Dependency installation failed: {message}",
+                f"Dependency installation failed. Exit code: {exit_code}. Output: {self.install_output}",
                 "Databricks Connector",
                 Qgis.Warning
             )
         
-        # Clean up thread
-        self.install_thread = None
+        # Clean up
+        self.install_process = None
+        self.install_output = ""
 
     def run(self):
         """Run method that performs all the real work"""
