@@ -285,94 +285,116 @@ class DatabricksConnector:
         if reply == QMessageBox.Yes:
             self._start_installation()
     
-    def _find_python_executable(self):
-        """Find the correct Python executable for QGIS.
+    def _find_qgis_pip(self):
+        """Find pip executable bundled with QGIS.
         
-        sys.executable in QGIS returns the QGIS app path, not Python.
-        We need to find the actual Python executable.
+        Returns tuple: (executable, args_list) where executable is either
+        pip3 directly or python3, and args_list contains the command arguments.
         """
         import platform
-        
-        # First, check if sys.executable is actually Python (not QGIS)
-        exe_name = os.path.basename(sys.executable).lower()
-        if 'python' in exe_name:
-            return sys.executable
-        
         system = platform.system()
+        tried_paths = []
         
         if system == 'Darwin':  # macOS
-            # QGIS on macOS: Python is in Contents/MacOS/bin/
+            # QGIS on macOS: binaries are in Contents/MacOS/bin/
             # sys.executable = /Applications/QGIS.app/Contents/MacOS/QGIS
-            qgis_dir = os.path.dirname(sys.executable)  # /Applications/QGIS.app/Contents/MacOS
-            python_path = os.path.join(qgis_dir, 'bin', 'python3')
+            qgis_dir = os.path.dirname(sys.executable)
+            bin_dir = os.path.join(qgis_dir, 'bin')
+            
+            # Try pip3 directly first (preferred)
+            pip_path = os.path.join(bin_dir, 'pip3')
+            tried_paths.append(pip_path)
+            if os.path.exists(pip_path):
+                return pip_path, ['install', 'databricks-sql-connector'], tried_paths
+            
+            # Try pip
+            pip_path = os.path.join(bin_dir, 'pip')
+            tried_paths.append(pip_path)
+            if os.path.exists(pip_path):
+                return pip_path, ['install', 'databricks-sql-connector'], tried_paths
+            
+            # Try python3 -m pip
+            python_path = os.path.join(bin_dir, 'python3')
+            tried_paths.append(python_path)
             if os.path.exists(python_path):
-                return python_path
-            # Try alternative path
-            python_path = os.path.join(qgis_dir, 'bin', 'python')
-            if os.path.exists(python_path):
-                return python_path
+                return python_path, ['-m', 'pip', 'install', 'databricks-sql-connector'], tried_paths
                 
         elif system == 'Windows':
             # QGIS on Windows: Python is in apps/PythonXX/
-            # sys.executable might be C:\Program Files\QGIS 3.x\bin\qgis-bin.exe
             qgis_root = os.path.dirname(os.path.dirname(sys.executable))
             apps_dir = os.path.join(qgis_root, 'apps')
+            
             if os.path.exists(apps_dir):
-                # Find Python directory (Python39, Python310, etc.)
                 for item in os.listdir(apps_dir):
                     if item.lower().startswith('python'):
-                        python_path = os.path.join(apps_dir, item, 'python.exe')
+                        python_dir = os.path.join(apps_dir, item)
+                        
+                        # Try Scripts/pip.exe
+                        pip_path = os.path.join(python_dir, 'Scripts', 'pip.exe')
+                        tried_paths.append(pip_path)
+                        if os.path.exists(pip_path):
+                            return pip_path, ['install', 'databricks-sql-connector'], tried_paths
+                        
+                        # Try python.exe -m pip
+                        python_path = os.path.join(python_dir, 'python.exe')
+                        tried_paths.append(python_path)
                         if os.path.exists(python_path):
-                            return python_path
+                            return python_path, ['-m', 'pip', 'install', 'databricks-sql-connector'], tried_paths
         
         else:  # Linux
-            # On Linux, try common Python paths
-            for python_name in ['python3', 'python']:
-                import shutil
-                python_path = shutil.which(python_name)
-                if python_path:
-                    return python_path
+            import shutil
+            # Try pip3 in PATH
+            pip_path = shutil.which('pip3')
+            if pip_path:
+                tried_paths.append(pip_path)
+                return pip_path, ['install', 'databricks-sql-connector'], tried_paths
+            
+            python_path = shutil.which('python3')
+            if python_path:
+                tried_paths.append(python_path)
+                return python_path, ['-m', 'pip', 'install', 'databricks-sql-connector'], tried_paths
         
-        # Fallback: use sys.prefix to find Python
-        if system == 'Windows':
-            python_path = os.path.join(sys.prefix, 'python.exe')
-        else:
-            python_path = os.path.join(sys.prefix, 'bin', 'python3')
-        
-        if os.path.exists(python_path):
-            return python_path
-        
-        # Last resort - this might not work but let's try
-        return 'python3' if system != 'Windows' else 'python'
+        return None, None, tried_paths
     
     def _start_installation(self):
         """Start the dependency installation using QProcess (Qt-native, avoids QGIS conflicts)."""
-        # Find the correct Python executable
-        python_exe = self._find_python_executable()
+        # Find pip or python executable
+        executable, args, tried_paths = self._find_qgis_pip()
         
+        # Log what we found
         QgsMessageLog.logMessage(
-            f"Found Python executable: {python_exe}",
+            f"Searched for pip/python in: {tried_paths}",
             "Databricks Connector",
             Qgis.Info
         )
         
-        # Verify Python exists
-        if not os.path.exists(python_exe) and os.path.sep in python_exe:
+        if executable:
+            QgsMessageLog.logMessage(
+                f"Found executable: {executable}",
+                "Databricks Connector",
+                Qgis.Info
+            )
+        
+        # If not found, show manual instructions
+        if not executable:
+            paths_tried = '\n'.join(tried_paths) if tried_paths else 'No paths found'
             QMessageBox.warning(
                 self.iface.mainWindow(),
-                "Databricks Connector - Python Not Found",
-                f"Could not find Python executable at:\n{python_exe}\n\n"
-                "Please install dependencies manually:\n"
-                "1. Open QGIS Python Console (Plugins → Python Console)\n"
-                "2. Run: import subprocess, sys, os\n"
-                "3. Run: subprocess.check_call([os.path.join(os.path.dirname(sys.executable), 'bin', 'python3'), '-m', 'pip', 'install', 'databricks-sql-connector'])\n"
-                "4. Restart QGIS"
+                "Databricks Connector - Cannot Find pip",
+                f"Could not find pip in QGIS installation.\n\n"
+                f"Paths searched:\n{paths_tried}\n\n"
+                "Please install dependencies manually using the QGIS Python Console:\n\n"
+                "1. Open Python Console (Plugins → Python Console)\n"
+                "2. Run this code:\n\n"
+                "import pip\n"
+                "pip.main(['install', 'databricks-sql-connector'])\n\n"
+                "3. Restart QGIS"
             )
             return
         
         # Create progress dialog
         self.progress_dialog = QProgressDialog(
-            f"Installing databricks-sql-connector...\nThis may take a few minutes.\n\nUsing: {python_exe}",
+            f"Installing databricks-sql-connector...\nThis may take a few minutes.\n\nUsing: {executable}",
             None,  # No cancel button
             0, 0,  # Indeterminate progress
             self.iface.mainWindow()
@@ -394,8 +416,8 @@ class DatabricksConnector:
         self.install_process.finished.connect(self._on_process_finished)
         self.install_process.errorOccurred.connect(self._on_process_error)
         
-        # Start pip install with correct Python
-        self.install_process.start(python_exe, ['-m', 'pip', 'install', 'databricks-sql-connector'])
+        # Start installation
+        self.install_process.start(executable, args)
         
         QgsMessageLog.logMessage(
             f"Starting pip install with: {python_exe} -m pip install databricks-sql-connector",
