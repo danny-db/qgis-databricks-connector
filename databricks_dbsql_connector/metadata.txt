@@ -1,0 +1,64 @@
+[general]
+name=Databricks DBSQL Connector
+qgisMinimumVersion=3.16
+qgisMaximumVersion=3.99
+description=Connect QGIS to Databricks SQL warehouses and access geospatial data directly from Unity Catalog
+version=1.0.0
+author=Danny Wong
+email=danny.wong@databricks.com
+
+# Required URLs
+homepage=https://github.com/danny-db/qgis-databricks-connector
+repository=https://github.com/danny-db/qgis-databricks-connector
+tracker=https://github.com/danny-db/qgis-databricks-connector/issues
+
+# Plugin icon (relative to plugin folder)
+icon=icons/databricks.svg
+
+# Tags for discoverability in plugin manager
+tags=databricks,database,sql,warehouse,geospatial,unity catalog,spatial,vector
+
+# Category - Database is most appropriate for this plugin
+category=Database
+
+# License - MIT is GPL-compatible
+license=MIT
+
+# Plugin flags
+experimental=False
+deprecated=False
+server=False
+
+# Detailed description with dependency information
+about=A QGIS plugin that provides direct connectivity to Databricks SQL warehouses, allowing you to load and display geospatial data from Unity Catalog tables directly in QGIS.
+
+    Features:
+    - Direct Databricks SQL connection using personal access tokens
+    - Full support for GEOGRAPHY and GEOMETRY data types
+    - Browser Panel integration for browsing catalogs, schemas, and tables
+    - Custom SQL query support with automatic geometry detection
+    - Automatic handling of mixed geometry types (creates separate layers)
+    - Configurable layer naming with persistent settings
+    - Connection management with saved credentials
+    
+    Requirements:
+    - Databricks SQL Warehouse access
+    - Personal Access Token with appropriate permissions
+    - Unity Catalog tables with GEOGRAPHY or GEOMETRY columns
+    
+    Python Dependencies (installed automatically by install scripts):
+    - databricks-sql-connector>=3.5.0 (required)
+    - shapely>=2.0.0 (optional, recommended)
+    - pyproj>=3.6.0 (optional)
+    
+    For installation instructions and documentation, visit the GitHub repository.
+
+# Changelog
+changelog=1.0.0 - Initial release
+    - Direct Databricks SQL warehouse connectivity
+    - Browser Panel integration for browsing Unity Catalog
+    - Custom SQL query dialog with database structure browser
+    - Support for GEOGRAPHY and GEOMETRY data types
+    - Automatic mixed geometry detection and layer separation
+    - Configurable layer prefix and feature limits
+    - Connection management with persistent settings

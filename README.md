@@ -39,9 +39,24 @@ A QGIS plugin that provides direct connectivity to Databricks SQL warehouses, al
 
 ## Installation
 
-### Automatic Installation (Recommended)
+### Option 1: Install from QGIS Plugin Manager (Recommended)
 
-1. **Download the plugin files** to a local directory
+1. Open QGIS
+2. Go to `Plugins → Manage and Install Plugins`
+3. Search for "Databricks DBSQL Connector"
+4. Click `Install Plugin`
+5. After installation, run the dependency installer (see Dependencies section below)
+
+### Option 2: Install from ZIP File
+
+1. Download the plugin ZIP file from the [Releases](https://github.com/danny-db/qgis-databricks-connector/releases) page
+2. In QGIS: `Plugins → Manage and Install Plugins → Install from ZIP`
+3. Select the downloaded ZIP file and click `Install Plugin`
+4. Run the dependency installer (see below)
+
+### Option 3: Manual Installation (Development)
+
+1. **Clone the repository** to a local directory
 2. **Run the installation script**:
    ```bash
    # For macOS 
@@ -55,6 +70,19 @@ A QGIS plugin that provides direct connectivity to Databricks SQL warehouses, al
    - Go to `Plugins → Manage and Install Plugins`
    - Find "Databricks DBSQL Connector" in the installed plugins
    - Check the box to enable it
+
+### Installing Dependencies
+
+The plugin requires the `databricks-sql-connector` package. After installing the plugin:
+
+1. Open the QGIS Python Console (`Plugins → Python Console`)
+2. Run the following commands:
+   ```python
+   import subprocess
+   import sys
+   subprocess.check_call([sys.executable, "-m", "pip", "install", "databricks-sql-connector>=3.5.0"])
+   ```
+3. Restart QGIS
 
 ## Usage
 
@@ -185,6 +213,41 @@ The plugin logs detailed information to the QGIS message log:
 3. **Use appropriate SQL warehouse sizes** for your data volumes
 4. **Leverage custom queries** to filter data at the source using WHERE clauses
 5. **Check the QGIS Log** (`View → Panels → Log Messages → Databricks Connector`) for detailed operation info
+
+## Repository Structure
+
+```
+qgis-databricks-connector/
+├── databricks_dbsql_connector/    # Plugin folder (for QGIS)
+│   ├── __init__.py                # Plugin entry point
+│   ├── metadata.txt               # Plugin metadata
+│   ├── LICENSE                    # MIT License
+│   ├── requirements.txt           # Python dependencies
+│   ├── databricks_connector.py    # Main plugin class
+│   ├── databricks_dialog.py       # Connection dialog and query UI
+│   ├── databricks_browser.py      # Browser panel integration
+│   ├── databricks_provider.py     # Data provider
+│   └── icons/                     # Plugin icons
+├── install_macos.py               # macOS installation script
+├── install_windows.py             # Windows installation script
+├── package_plugin.py              # Script to create plugin ZIP
+├── README.md                      # This file
+└── LICENSE                        # MIT License
+```
+
+## Packaging for Distribution
+
+To create a ZIP file for upload to the QGIS Plugin Repository:
+
+```bash
+python3 package_plugin.py
+```
+
+This creates `databricks_dbsql_connector.zip` ready for upload to https://plugins.qgis.org
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 

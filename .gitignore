@@ -1,6 +1,10 @@
 # macOS
 .DS_Store
 
+# Windows
+Thumbs.db
+ehthumbs.db
+
 # Python
 __pycache__/
 *.py[cod]
@@ -8,15 +12,51 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+.Python
+*.egg-info/
+dist/
+build/
+eggs/
+*.egg
 
 # Backup files
 *.backup
+*.bak
+*~
 
-# Jupyter Notebook checkpoints
+# Jupyter Notebook
 .ipynb_checkpoints/
+*.ipynb
 
 # Virtual environments
 venv/
 env/
 ENV/
+.venv/
 
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# QGIS Plugin specific
+# Generated resource files
+*_rc.py
+resources_rc.py
+
+# Generated UI files (if using Qt Designer)
+ui_*.py
+
+# Plugin ZIP packages (generated for distribution)
+*.zip
+
+# Local testing
+test/
+tests/
+
+# Documentation build
+docs/_build/
+
+# pb_tool configuration (if using pb_tool for packaging)
+pb_tool.cfg
