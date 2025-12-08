@@ -114,7 +114,7 @@ class DatabricksConnector:
     def initGui(self):
         """Create the menu entries and toolbar icons inside the QGIS GUI."""
 
-        icon_path = os.path.join(self.plugin_dir, 'icon.png')
+        icon_path = os.path.join(self.plugin_dir, 'icons', 'databricks.svg')
         
         # Create action to open connection dialog
         self.add_action(
@@ -267,15 +267,15 @@ class DatabricksConnector:
         
         # Check if dependencies are available
         if not DATABRICKS_AVAILABLE:
-            QMessageBox.critical(
+            QMessageBox.warning(
                 self.iface.mainWindow(),
-                "Missing Dependencies",
-                f"Required Python packages are not installed:\n\n{IMPORT_ERROR}\n\n"
-                "Please install the required packages:\n"
-                "1. Open QGIS Python Console\n"
-                "2. Run: import subprocess, sys\n"
-                "3. Run: subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'databricks-sql-connector', 'shapely'])\n"
-                "4. Restart QGIS"
+                "Databricks Connector - Dependencies Required",
+                "The Databricks SQL Connector package is not installed.\n\n"
+                "To install, open the QGIS Python Console (Plugins → Python Console) and run:\n\n"
+                "import subprocess, sys\n"
+                "subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'databricks-sql-connector'])\n\n"
+                "Then restart QGIS.\n\n"
+                f"Technical details: {IMPORT_ERROR}"
             )
             return
         
