@@ -417,13 +417,12 @@ class DatabricksConnector:
         self.install_process.errorOccurred.connect(self._on_process_error)
         
         # Start installation
-        self.install_process.start(executable, args)
-        
         QgsMessageLog.logMessage(
-            f"Starting pip install with: {python_exe} -m pip install databricks-sql-connector",
+            f"Starting installation: {executable} {' '.join(args)}",
             "Databricks Connector",
             Qgis.Info
         )
+        self.install_process.start(executable, args)
     
     def _on_process_output(self):
         """Capture process output."""
