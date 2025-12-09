@@ -1,0 +1,53 @@
+name: Create Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # Trigger on version tags like v1.0.0
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      
+      - name: Create plugin ZIP
+        run: python package_plugin.py
+      
+      - name: Get version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Databricks DBSQL Connector v${{ steps.get_version.outputs.VERSION }}
+          body: |
+            ## Installation
+            
+            1. Download `databricks_dbsql_connector.zip` below
+            2. In QGIS: `Plugins → Manage and Install Plugins → Install from ZIP`
+            3. Select the downloaded ZIP file
+            4. Click the Databricks icon and follow the prompts to install dependencies
+            5. Restart QGIS
+            
+            ## What's New
+            
+            See [CHANGELOG](https://github.com/danny-db/qgis-databricks-connector/blob/main/README.md) for details.
+            
+            ---
+            
+            ⚠️ **Important**: Download the `databricks_dbsql_connector.zip` file below, NOT the "Source code" ZIP.
+          files: databricks_dbsql_connector.zip
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

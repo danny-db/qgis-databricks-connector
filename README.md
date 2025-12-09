@@ -39,20 +39,29 @@ A QGIS plugin that provides direct connectivity to Databricks SQL warehouses, al
 
 ## Installation
 
-### Option 1: Install from QGIS Plugin Manager (Recommended)
+### Option 1: Install from ZIP File (Recommended)
+
+1. **Download the plugin ZIP** from the [Releases page](https://github.com/danny-db/qgis-databricks-connector/releases)
+   
+   ⚠️ **Important**: Download `databricks_dbsql_connector.zip`, NOT "Source code (zip)"!
+
+2. In QGIS: `Plugins → Manage and Install Plugins → Install from ZIP`
+
+3. Select the downloaded `databricks_dbsql_connector.zip` and click `Install Plugin`
+
+4. Click the **Databricks icon** in the toolbar - the plugin will offer to install dependencies automatically
+
+5. **Restart QGIS** after dependencies are installed
+
+### Option 2: Install from QGIS Plugin Manager
+
+*(Available after the plugin is published to the official repository)*
 
 1. Open QGIS
 2. Go to `Plugins → Manage and Install Plugins`
 3. Search for "Databricks DBSQL Connector"
 4. Click `Install Plugin`
-5. After installation, run the dependency installer (see Dependencies section below)
-
-### Option 2: Install from ZIP File
-
-1. Download the plugin ZIP file from the [Releases](https://github.com/danny-db/qgis-databricks-connector/releases) page
-2. In QGIS: `Plugins → Manage and Install Plugins → Install from ZIP`
-3. Select the downloaded ZIP file and click `Install Plugin`
-4. Run the dependency installer (see below)
+5. Click the Databricks icon to install dependencies, then restart QGIS
 
 ### Option 3: Manual Installation (Development)
 
@@ -71,16 +80,15 @@ A QGIS plugin that provides direct connectivity to Databricks SQL warehouses, al
    - Find "Databricks DBSQL Connector" in the installed plugins
    - Check the box to enable it
 
-### Installing Dependencies
+### Installing Dependencies Manually
 
-The plugin requires the `databricks-sql-connector` package. After installing the plugin:
+If automatic dependency installation fails, you can install manually:
 
 1. Open the QGIS Python Console (`Plugins → Python Console`)
-2. Run the following commands:
+2. Run:
    ```python
-   import subprocess
-   import sys
-   subprocess.check_call([sys.executable, "-m", "pip", "install", "databricks-sql-connector>=3.5.0"])
+   import pip
+   pip.main(['install', 'databricks-sql-connector'])
    ```
 3. Restart QGIS
 
