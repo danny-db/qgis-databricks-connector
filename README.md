@@ -2,87 +2,79 @@
 
 A QGIS plugin that provides direct connectivity to Databricks SQL warehouses, allowing you to load and display geospatial data from Unity Catalog tables directly in QGIS.
 
-- Walkthrough (Mac): https://www.youtube.com/watch?v=M5ZvVWpZnQY
-- Windows installation: https://www.youtube.com/watch?v=zpyWuKZTePQ
+## 📥 Quick Install
+
+**Download the latest release:** [databricks_dbsql_connector.zip](https://github.com/danny-db/qgis-databricks-connector/releases/latest/download/databricks_dbsql_connector.zip)
+
+1. In QGIS: `Plugins → Manage and Install Plugins → Install from ZIP`
+2. Select the downloaded `databricks_dbsql_connector.zip`
+3. Click the **Databricks icon** → Accept automatic dependency installation
+4. **Restart QGIS**
+
+⚠️ **Important**: Download `databricks_dbsql_connector.zip` from the [Releases page](https://github.com/danny-db/qgis-databricks-connector/releases), NOT "Source code (zip)"!
+
+---
+
+## 📺 Video Tutorials
+
+- [Walkthrough (Mac)](https://www.youtube.com/watch?v=M5ZvVWpZnQY)
+- [Windows installation](https://www.youtube.com/watch?v=zpyWuKZTePQ)
 
 ## Features
 
-- **Direct Databricks SQL Connection**: Connect directly to Databricks SQL warehouses using personal access tokens. Connect to serverless SQL for the best performance.
+- **Direct Databricks SQL Connection**: Connect directly to Databricks SQL warehouses using personal access tokens
 - **Spatial Data Support**: Full support for GEOGRAPHY and GEOMETRY data types 
 - **Multiple Access Methods**: Load data via Dialog, Browser Panel, or Custom Query interface
-- **Browser Panel Integration**: Browse catalogs, schemas, and tables directly in QGIS Browser with context menu actions
-- **Custom SQL Query Support**: Execute any SQL query and add results as layers with automatic geometry detection
-- **Table Discovery**: Automatically discover tables with spatial columns (GEOMETRY, GEOGRAPHY) in your Unity Catalog
+- **Browser Panel Integration**: Browse catalogs, schemas, and tables directly in QGIS Browser
+- **Custom SQL Query Support**: Execute any SQL query and add results as layers
+- **Table Discovery**: Automatically discover tables with spatial columns in your Unity Catalog
 - **Memory Layer Creation**: Load spatial data as QGIS memory layers with full attribute support
-- **Connection Management**: Save and manage multiple Databricks connections with persistent settings
-- **Mixed Geometry Handling**: Automatically creates separate layers for different geometry types in the same table
-- **Configurable Layer Naming**: Set custom layer name prefix that applies across all loading methods
-- **Flexible Feature Limits**: Load all records or limit to specific count (default: unlimited)
+- **Connection Management**: Save and manage multiple Databricks connections
+- **Mixed Geometry Handling**: Automatically creates separate layers for different geometry types
+- **Configurable Layer Naming**: Set custom layer name prefix
+- **Flexible Feature Limits**: Load all records or limit to specific count
 
 ## Requirements
 
 ### QGIS Version
-- Tested QGIS 3.42.1 and 3.44.1 on Mac and Windows
-- It should work with other versions too.
+- Tested on QGIS 3.42.1, 3.44.1, and 3.44.5 (Mac and Windows)
+- Should work with QGIS 3.16+
 
 ### Python Dependencies
-- `databricks-sql-connector>=3.5.0` (required - for Databricks SQL connectivity)
-- `shapely>=2.0.0` (optional but recommended - for geometry operations)
-- `pyproj>=3.6.0` (optional - for advanced coordinate system projections)
+- **`databricks-sql-connector`** - Required (installed automatically by the plugin)
 
-**Note**: QGIS includes built-in WKT parsing, so the plugin works without shapely, but having it installed can improve geometry handling.
+> **Note**: `shapely` and `pyproj` are already bundled with QGIS - no additional installation needed.
 
 ### Databricks Requirements
-- Databricks SQL Warehouse access
+- Databricks SQL Warehouse access (Serverless recommended for best performance)
 - Personal Access Token with appropriate permissions
 - Unity Catalog tables with GEOGRAPHY or GEOMETRY columns
 
 ## Installation
 
-### Option 1: Install from ZIP File (Recommended)
+### Option 1: Install from ZIP File (Recommended) ⭐
 
-1. **Download the plugin ZIP** from the [Releases page](https://github.com/danny-db/qgis-databricks-connector/releases)
-   
-   ⚠️ **Important**: Download `databricks_dbsql_connector.zip`, NOT "Source code (zip)"!
+1. **Download** [`databricks_dbsql_connector.zip`](https://github.com/danny-db/qgis-databricks-connector/releases/latest/download/databricks_dbsql_connector.zip) from the [Releases page](https://github.com/danny-db/qgis-databricks-connector/releases)
 
 2. In QGIS: `Plugins → Manage and Install Plugins → Install from ZIP`
 
-3. Select the downloaded `databricks_dbsql_connector.zip` and click `Install Plugin`
+3. Select the downloaded ZIP file and click `Install Plugin`
 
-4. Click the **Databricks icon** in the toolbar - the plugin will offer to install dependencies automatically
+4. Click the **Databricks icon** in the toolbar - the plugin will offer to install the required `databricks-sql-connector` package automatically
 
 5. **Restart QGIS** after dependencies are installed
 
 ### Option 2: Install from QGIS Plugin Manager
 
-*(Available after the plugin is published to the official repository)*
+*(Coming soon - after the plugin is published to the official repository)*
 
-1. Open QGIS
-2. Go to `Plugins → Manage and Install Plugins`
-3. Search for "Databricks DBSQL Connector"
-4. Click `Install Plugin`
-5. Click the Databricks icon to install dependencies, then restart QGIS
-
-### Option 3: Manual Installation (Development)
-
-1. **Clone the repository** to a local directory
-2. **Run the installation script**:
-   ```bash
-   # For macOS 
-   python3 install_macos.py
-   
-   # For Windows
-   python3 install_windows.py
-   ```
-3. **Restart QGIS**
-4. **Enable the plugin**:
-   - Go to `Plugins → Manage and Install Plugins`
-   - Find "Databricks DBSQL Connector" in the installed plugins
-   - Check the box to enable it
+1. Go to `Plugins → Manage and Install Plugins`
+2. Search for "Databricks DBSQL Connector"
+3. Click `Install Plugin`
 
 ### Installing Dependencies Manually
 
-If automatic dependency installation fails, you can install manually:
+If automatic dependency installation fails:
 
 1. Open the QGIS Python Console (`Plugins → Python Console`)
 2. Run:
@@ -96,7 +88,7 @@ If automatic dependency installation fails, you can install manually:
 
 ### Setting Up a Connection
 
-1. **Open the plugin** by clicking the Databricks icon in the toolbar or going to `Plugins → Databricks DBSQL Connector → Connect to Databricks SQL`
+1. **Open the plugin** by clicking the Databricks icon in the toolbar
 
 2. **Enter connection details**:
    - **Connection Name**: A friendly name for saving this connection
@@ -106,152 +98,92 @@ If automatic dependency installation fails, you can install manually:
 
 3. **Test the connection** by clicking "Test Connection"
 
-4. **Configure layer options**:
-   - **Layer Name Prefix**: Custom prefix for layer names (default: "databricks_")
-   - **Max Features**: Leave empty for unlimited, or enter a number to limit (e.g., 1000)
+4. **Save the connection** to persist settings
 
-5. **Save the connection** to persist settings by clicking "Save Connection"
+### Loading Data
 
-### Method 1: Loading via Dialog (Table Discovery)
+#### Method 1: Table Discovery (Dialog)
+1. Click "Discover Tables" after connecting
+2. Select tables to load
+3. Click "Add Selected Layers"
 
-1. **Discover tables** by clicking "Discover Tables" after a successful connection test
+#### Method 2: Browser Panel
+1. Open Browser Panel (`View → Panels → Browser`)
+2. Expand `Databricks` → Your Connection → Catalog → Schema
+3. Right-click a table:
+   - **Add First 1000 Features**: Quick preview
+   - **Add All Features**: Load complete dataset
+   - **View Data...**: Open custom query dialog
 
-2. **Select tables** to load:
-   - Check the boxes next to the tables you want to add to QGIS
-   - Review the geometry column and type information
-
-3. **Add layers** by clicking "Add Selected Layers"
-   - Uses the configured layer prefix and max features settings
-   - Automatically creates separate layers for mixed geometry types
-
-### Method 2: Loading via Browser Panel
-
-1. **Open the QGIS Browser Panel** (`View → Panels → Browser`)
-
-2. **Navigate the hierarchy**:
-   - Expand `Databricks` in the browser
-   - Select your saved connection
-   - Browse through Catalogs → Schemas → Tables
-
-3. **Load data** by right-clicking on a spatial table:
-   - **Add First 1000 Features**: Quick preview (default for double-click)
-   - **Add All Features**: Load complete dataset without limit
-   - **View Data...**: Preview data in custom query dialog
-
-### Method 3: Custom SQL Queries
-
-1. **Open Custom Query** from the connection dialog or browser context menu
-
-2. **Browse database structure**:
-   - Tree view shows all accessible catalogs, schemas, and tables
-   - Double-click items to insert into query
-   - 🗺️ icon indicates tables with geometry columns
-
-3. **Write and execute your query**:
-   ```sql
-   SELECT id, name, geometry 
-   FROM catalog.schema.spatial_table 
-   WHERE condition
-   ```
-   - Geometry columns are automatically converted to WKT format
-   - No need to use ST_ASWKT in your queries
-
-4. **Add results as layer**:
-   - Set Layer Name Prefix (uses saved setting by default)
-   - Geometry column is auto-detected or can be specified
-   - Click "Add as Layer" to create QGIS layer
-
-### Working with the Data
-
-- **Spatial data** is loaded as QGIS memory layers with full geometry support
-- **Attributes** from all non-geometry columns are included
-- **Mixed geometries** are automatically split into separate layers (e.g., Points, LineStrings, Polygons)
-- **Identifier handling**: Tables/columns with hyphens or special characters are properly escaped
-- **Styling** can be applied using standard QGIS symbology tools
-- **Analysis** can be performed using QGIS spatial analysis tools
+#### Method 3: Custom SQL Queries
+1. Open Custom Query from the dialog or browser
+2. Write your SQL query
+3. Click "Execute Query"
+4. Click "Add as Layer"
 
 ## Supported Geometry Types
 
-The plugin has been tested with the following geometry types:
-- **Point / MultiPoint**
-- **LineString / MultiLineString**
-- **Polygon / MultiPolygon**
-- **Mixed Geometry Tables**: Automatically detected and split into separate layers
-
-**Note**: Generic GEOMETRY columns are automatically analyzed to detect the actual geometry types present in the data.
+- Point / MultiPoint
+- LineString / MultiLineString
+- Polygon / MultiPolygon
+- Mixed Geometry Tables (automatically split into separate layers)
 
 ## Troubleshooting
 
-### Common Issues
+### "Connection failed"
+- Verify hostname, HTTP path, and access token
+- Check network connectivity to Databricks
+- Ensure the SQL warehouse is running
 
-#### "Connection failed"
-- **Cause**: Invalid connection parameters or network issues
-- **Solution**: 
-  - Verify hostname, HTTP path, and access token
-  - Check network connectivity to Databricks
-  - Ensure the SQL warehouse is running.  Use serverless SQL for the best performance.
+### "No spatial tables found"
+- Verify Unity Catalog access permissions
+- Check that tables have GEOMETRY or GEOGRAPHY columns
+- Check QGIS Log Messages (`View → Panels → Log Messages → Databricks Connector`)
 
-#### "No spatial tables found" or "Empty catalogs/schemas"
-- **Cause**: No tables with GEOGRAPHY/GEOMETRY columns in accessible catalogs, or insufficient permissions
-- **Solution**:
-  - Verify you have access to the Unity Catalog
-  - Check that tables have GEOMETRY or GEOGRAPHY data type columns
-  - Ensure proper permissions on the catalogs, schemas, and tables
-  - Use Custom Query to test direct SQL access: `SELECT * FROM catalog.schema.table LIMIT 10`
-  - Check QGIS Log Messages for detailed error information
-
-#### "Missing Dependencies"
-- **Cause**: Required Python packages not installed
-- **Solution**: Follow the dependency installation steps above
+### Dependency Installation Issues
+If automatic installation fails, try manual installation via Python Console (see above).
 
 ### Debug Logging
-
-The plugin logs detailed information to the QGIS message log:
 - Go to `View → Panels → Log Messages`
-- Select "Databricks Connector" from the dropdown
-- Review error messages and connection details
-
-### Performance Tips
-
-1. **Use feature limits for large tables**: 
-   - Browser: Use "Add First 1000 Features" for quick preview
-   - Dialog: Set Max Features to limit records (leave empty for unlimited)
-   - Consider starting with smaller datasets to check geometry and attributes
-2. **Use Serverless SQL** when possible for the best performance
-3. **Use appropriate SQL warehouse sizes** for your data volumes
-4. **Leverage custom queries** to filter data at the source using WHERE clauses
-5. **Check the QGIS Log** (`View → Panels → Log Messages → Databricks Connector`) for detailed operation info
+- Select "Databricks Connector" for detailed logs
 
 ## Repository Structure
 
 ```
 qgis-databricks-connector/
-├── databricks_dbsql_connector/    # Plugin folder (for QGIS)
+├── databricks_dbsql_connector/    # Plugin folder
 │   ├── __init__.py                # Plugin entry point
 │   ├── metadata.txt               # Plugin metadata
 │   ├── LICENSE                    # MIT License
-│   ├── requirements.txt           # Python dependencies
 │   ├── databricks_connector.py    # Main plugin class
 │   ├── databricks_dialog.py       # Connection dialog and query UI
 │   ├── databricks_browser.py      # Browser panel integration
 │   ├── databricks_provider.py     # Data provider
 │   └── icons/                     # Plugin icons
-├── install_macos.py               # macOS installation script
-├── install_windows.py             # Windows installation script
+├── .github/workflows/             # GitHub Actions for releases
 ├── package_plugin.py              # Script to create plugin ZIP
 ├── README.md                      # This file
 └── LICENSE                        # MIT License
 ```
 
-## Packaging for Distribution
+## For Developers
 
-To create a ZIP file for upload to the QGIS Plugin Repository:
+### Creating a Release ZIP
 
 ```bash
 python3 package_plugin.py
 ```
 
-This creates `databricks_dbsql_connector.zip` ready for upload to https://plugins.qgis.org
+This creates `databricks_dbsql_connector.zip` for distribution.
+
+### Creating a New Release
+
+```bash
+git tag v1.x.x
+git push origin v1.x.x
+```
+
+GitHub Actions will automatically create a release with the plugin ZIP attached.
 
 ## Contributing
 
@@ -260,4 +192,3 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
