@@ -195,22 +195,22 @@ class DatabricksCatalogItem(QgsDataCollectionItem):
             
             with connection.cursor() as cursor:
                 # Use system.information_schema.schemata to get all accessible schemas
-                # This is more reliable than querying columns table
-                info_query = f"""
+                # Using parameterized query to prevent SQL injection
+                info_query = """
                     SELECT DISTINCT schema_name
                     FROM system.information_schema.schemata
-                    WHERE catalog_name = '{self.catalog_name}'
+                    WHERE catalog_name = :catalog
                         AND schema_name IS NOT NULL 
                     ORDER BY schema_name
                 """
                 
                 QgsMessageLog.logMessage(
-                    f"Browser: Querying schemas for catalog '{self.catalog_name}' with: {info_query}",
+                    f"Browser: Querying schemas for catalog '{self.catalog_name}'",
                     "Databricks Browser",
                     Qgis.Info
                 )
                 
-                cursor.execute(info_query)
+                cursor.execute(info_query, {"catalog": self.catalog_name})
                 results = cursor.fetchall()
                 schemas = [row[0] for row in results if row[0]]
                 
@@ -287,22 +287,23 @@ class DatabricksSchemaItem(QgsDataCollectionItem):
             
             with connection.cursor() as cursor:
                 # First, get all accessible tables using system.information_schema.tables
-                tables_query = f"""
+                # Using parameterized query to prevent SQL injection
+                tables_query = """
                     SELECT DISTINCT table_name
                     FROM system.information_schema.tables
-                    WHERE table_catalog = '{self.catalog_name}'
-                        AND table_schema = '{self.schema_name}'
+                    WHERE table_catalog = :catalog
+                        AND table_schema = :schema
                         AND table_name IS NOT NULL
                     ORDER BY table_name
                 """
                 
                 QgsMessageLog.logMessage(
-                    f"Browser: Querying tables for {self.catalog_name}.{self.schema_name} with: {tables_query}",
+                    f"Browser: Querying tables for {self.catalog_name}.{self.schema_name}",
                     "Databricks Browser",
                     Qgis.Info
                 )
                 
-                cursor.execute(tables_query)
+                cursor.execute(tables_query, {"catalog": self.catalog_name, "schema": self.schema_name})
                 table_results = cursor.fetchall()
                 
                 # Initialize all tables
@@ -322,24 +323,25 @@ class DatabricksSchemaItem(QgsDataCollectionItem):
                 )
                 
                 # Now check for geometry columns using system.information_schema.columns
+                # Using parameterized query to prevent SQL injection
                 if tables:
-                    columns_query = f"""
+                    columns_query = """
                         SELECT table_name, column_name, data_type
                         FROM system.information_schema.columns 
-                        WHERE table_catalog = '{self.catalog_name}'
-                            AND table_schema = '{self.schema_name}'
+                        WHERE table_catalog = :catalog
+                            AND table_schema = :schema
                             AND table_name IS NOT NULL 
                             AND data_type IN ('GEOMETRY', 'GEOGRAPHY')
                         ORDER BY table_name, column_name
                     """
                     
                     QgsMessageLog.logMessage(
-                        f"Browser: Querying geometry columns with: {columns_query}",
+                        f"Browser: Querying geometry columns for {self.catalog_name}.{self.schema_name}",
                         "Databricks Browser",
                         Qgis.Info
                     )
                     
-                    cursor.execute(columns_query)
+                    cursor.execute(columns_query, {"catalog": self.catalog_name, "schema": self.schema_name})
                     column_results = cursor.fetchall()
                     
                     # Update tables with geometry information
@@ -572,6 +574,9 @@ class DatabricksTableItem(QgsDataCollectionItem):
                 attr_sql = ", ".join(attr_columns) if attr_columns else "1"
                 
                 # Build query with optional LIMIT clause
+                # Note: Table/column identifiers cannot be parameterized in SQL.
+                # Security is ensured via _escape_identifier() which wraps all identifiers
+                # in backticks, preventing SQL injection through identifier manipulation.
                 data_query = f"""
                     SELECT {attr_sql}, {geometry_sql} as geometry_wkt
                     FROM {table_ref}
@@ -821,8 +826,11 @@ class DatabricksTableItem(QgsDataCollectionItem):
     def _view_data(self):
         """View table data in a query dialog"""
         try:
+            # Table reference is escaped via _get_table_reference() using backticks
             full_table_name = self._get_table_reference()
             
+            # This is just an initial query template shown to user in the dialog
+            # The user can modify it before execution
             dialog = DatabricksQueryDialog(
                 self.connection_config,
                 QgsApplication.instance().activeWindow(),

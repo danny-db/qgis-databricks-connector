@@ -639,6 +639,8 @@ class DatabricksConnector:
             escaped_geom_col = escape_id(geometry_column)
             
             # Build query based on layer's current fields
+            # Note: Table/column identifiers cannot be parameterized in SQL.
+            # Security is ensured via escape_id() which wraps identifiers in backticks.
             field_names = [escape_id(f.name()) for f in layer.fields()]
             select_clause = field_names.copy()
             select_clause.append(f"ST_ASWKT({escaped_geom_col}) as geom_wkt")

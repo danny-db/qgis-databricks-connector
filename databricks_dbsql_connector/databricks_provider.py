@@ -253,6 +253,8 @@ class DatabricksProvider(QgsVectorDataProvider):
                         self.fields_cache.append(field)
                 
                 # Get feature count
+                # Note: table_ref is escaped via _get_escaped_table_ref() using backticks
+                # Table identifiers cannot be parameterized in SQL
                 cursor.execute(f"SELECT COUNT(*) FROM {table_ref}")
                 result = cursor.fetchone()
                 self.feature_count_cache = result[0] if result else 0

@@ -255,6 +255,8 @@ class LayerLoadingThread(QThread):
                 attribute_fields = [self._escape_identifier(f.name()) for f in fields]
 
                 # Build query with geometry as WKT - only select fields that are in the layer
+                # Note: Table/column identifiers cannot be parameterized in SQL.
+                # Security is ensured via _escape_identifier() which wraps identifiers in backticks.
                 select_clause = attribute_fields.copy()
                 escaped_geom_col = self._escape_identifier(geometry_column)
                 select_clause.append(f"ST_ASWKT({escaped_geom_col}) as geom_wkt")
@@ -611,6 +613,8 @@ class LayerLoadingThread(QThread):
                 
                 # Query to detect all geometry types in the table
                 # No LIMIT needed since DISTINCT already returns only unique types
+                # Note: Table/column identifiers cannot be parameterized in SQL.
+                # Security is ensured via _escape_identifier() which wraps identifiers in backticks.
                 query = f"""
                 SELECT DISTINCT ST_GEOMETRYTYPE({escaped_geom_col}) as geom_type 
                 FROM {table_ref} 
@@ -2498,11 +2502,16 @@ class QueryLayerCreationThread(QThread):
                         catalog, schema, table = None, None, parts[0]
                     
                     # Query information_schema for geometry columns
-                    where_conditions = [f"table_name = '{table}'"]
+                    # Using parameterized query to prevent SQL injection
+                    where_conditions = ["table_name = :tbl"]
+                    params = {"tbl": table}
+                    
                     if schema:
-                        where_conditions.append(f"table_schema = '{schema}'")
+                        where_conditions.append("table_schema = :schema")
+                        params["schema"] = schema
                     if catalog:
-                        where_conditions.append(f"table_catalog = '{catalog}'")
+                        where_conditions.append("table_catalog = :catalog")
+                        params["catalog"] = catalog
                     
                     where_clause = " AND ".join(where_conditions)
                     
@@ -2514,12 +2523,12 @@ class QueryLayerCreationThread(QThread):
                     """
                     
                     QgsMessageLog.logMessage(
-                        f"Checking for geometry columns in {table_name}: {info_query}",
+                        f"Checking for geometry columns in {table_name}",
                         "Query Dialog",
                         Qgis.Info
                     )
                     
-                    cursor.execute(info_query)
+                    cursor.execute(info_query, params)
                     results = cursor.fetchall()
                     
                     for row in results:
