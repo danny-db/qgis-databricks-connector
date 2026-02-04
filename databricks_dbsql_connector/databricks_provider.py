@@ -201,6 +201,27 @@ class DatabricksProvider(QgsVectorDataProvider):
             )
             self.connection = None
     
+    def _escape_identifier(self, identifier):
+        """Escape identifier with backticks for Databricks SQL.
+        
+        This handles identifiers with special characters like hyphens or spaces.
+        """
+        if not identifier:
+            return identifier
+        # Remove existing backticks to avoid double-escaping
+        identifier = identifier.strip('`')
+        return f"`{identifier}`"
+    
+    def _get_escaped_table_ref(self):
+        """Get properly escaped table reference from table parts."""
+        table_parts = []
+        if self.catalog_name:
+            table_parts.append(self._escape_identifier(self.catalog_name))
+        if self.schema_name:
+            table_parts.append(self._escape_identifier(self.schema_name))
+        table_parts.append(self._escape_identifier(self.table_name))
+        return '.'.join(table_parts)
+    
     def _initialize_layer(self):
         """Initialize layer by querying table schema and detecting geometry"""
         if not self.connection:
@@ -208,14 +229,8 @@ class DatabricksProvider(QgsVectorDataProvider):
             
         try:
             with self.connection.cursor() as cursor:
-                # Get table schema - construct full table reference
-                table_parts = []
-                if self.catalog_name:
-                    table_parts.append(self.catalog_name)
-                if self.schema_name:
-                    table_parts.append(self.schema_name)
-                table_parts.append(self.table_name)
-                table_ref = '.'.join(table_parts)
+                # Get table schema - construct full table reference with proper escaping
+                table_ref = self._get_escaped_table_ref()
                 
                 cursor.execute(f"DESCRIBE {table_ref}")
                 schema_info = cursor.fetchall()
@@ -256,11 +271,12 @@ class DatabricksProvider(QgsVectorDataProvider):
     def _detect_geometry_type(self, table_ref: str, geom_col: str):
         """Detect the geometry type of the layer"""
         try:
+            escaped_geom_col = self._escape_identifier(geom_col)
             with self.connection.cursor() as cursor:
                 cursor.execute(f"""
-                    SELECT ST_GEOMETRYTYPE({geom_col}) as geom_type 
+                    SELECT ST_GEOMETRYTYPE({escaped_geom_col}) as geom_type 
                     FROM {table_ref} 
-                    WHERE {geom_col} IS NOT NULL 
+                    WHERE {escaped_geom_col} IS NOT NULL 
                     LIMIT 1
                 """)
                 result = cursor.fetchone()
@@ -293,15 +309,16 @@ class DatabricksProvider(QgsVectorDataProvider):
     def _calculate_extent(self, table_ref: str):
         """Calculate spatial extent of the layer"""
         try:
+            escaped_geom_col = self._escape_identifier(self.geometry_column)
             with self.connection.cursor() as cursor:
                 cursor.execute(f"""
                     SELECT 
-                        ST_XMIN(ST_ENVELOPE(ST_UNION({self.geometry_column}))) as min_x,
-                        ST_YMIN(ST_ENVELOPE(ST_UNION({self.geometry_column}))) as min_y,
-                        ST_XMAX(ST_ENVELOPE(ST_UNION({self.geometry_column}))) as max_x,
-                        ST_YMAX(ST_ENVELOPE(ST_UNION({self.geometry_column}))) as max_y
+                        ST_XMIN(ST_ENVELOPE(ST_UNION({escaped_geom_col}))) as min_x,
+                        ST_YMIN(ST_ENVELOPE(ST_UNION({escaped_geom_col}))) as min_y,
+                        ST_XMAX(ST_ENVELOPE(ST_UNION({escaped_geom_col}))) as max_x,
+                        ST_YMAX(ST_ENVELOPE(ST_UNION({escaped_geom_col}))) as max_y
                     FROM {table_ref}
-                    WHERE {self.geometry_column} IS NOT NULL
+                    WHERE {escaped_geom_col} IS NOT NULL
                 """)
                 result = cursor.fetchone()
                 
@@ -383,19 +400,16 @@ class DatabricksProvider(QgsVectorDataProvider):
         
         try:
             with self.connection.cursor() as cursor:
-                # Build query based on request - construct full table reference  
-                table_parts = []
-                if self.catalog_name:
-                    table_parts.append(self.catalog_name)
-                if self.schema_name:
-                    table_parts.append(self.schema_name)
-                table_parts.append(self.table_name)
-                table_ref = '.'.join(table_parts)
+                # Build query based on request - use escaped table reference
+                table_ref = self._get_escaped_table_ref()
                 
-                # Select fields
-                field_names = [field.name() for field in self.fields_cache]
+                # Escape geometry column name
+                escaped_geom_col = self._escape_identifier(self.geometry_column)
+                
+                # Select fields - escape all field names
+                field_names = [self._escape_identifier(field.name()) for field in self.fields_cache]
                 if self.geometry_column:
-                    field_names.append(f"ST_ASWKT({self.geometry_column}) as {self.geometry_column}")
+                    field_names.append(f"ST_ASWKT({escaped_geom_col}) as geom_wkt")
                 
                 query = f"SELECT {', '.join(field_names)} FROM {table_ref}"
                 
@@ -404,7 +418,7 @@ class DatabricksProvider(QgsVectorDataProvider):
                 if request.filterRect() and not request.filterRect().isEmpty():
                     rect = request.filterRect()
                     spatial_filter = f"""
-                        ST_INTERSECTS({self.geometry_column}, 
+                        ST_INTERSECTS({escaped_geom_col}, 
                             ST_GEOMFROMTEXT('POLYGON(({rect.xMinimum()} {rect.yMinimum()}, {rect.xMaximum()} {rect.yMinimum()}, {rect.xMaximum()} {rect.yMaximum()}, {rect.xMinimum()} {rect.yMaximum()}, {rect.xMinimum()} {rect.yMinimum()}))', 4326))
                     """
                     where_conditions.append(spatial_filter)

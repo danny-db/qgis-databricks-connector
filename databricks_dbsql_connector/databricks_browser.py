@@ -3,7 +3,7 @@ Databricks Browser Provider for QGIS Browser Panel
 """
 import os
 from typing import List, Dict, Any, Optional
-from qgis.PyQt.QtCore import QThread, pyqtSignal, QSettings
+from qgis.PyQt.QtCore import QThread, pyqtSignal, QSettings, QDate, QTime, QDateTime, QVariant
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction, QMenu, QMessageBox, QInputDialog
 from qgis.core import (
@@ -550,7 +550,7 @@ class DatabricksTableItem(QgsDataCollectionItem):
                     
                     # Skip geometry column and geometry types
                     if col_name.lower() != geometry_column.lower() and not col_type.startswith(('GEOGRAPHY', 'GEOMETRY')):
-                        # Map databricks types to QGIS types
+                        # Map databricks types to QGIS types (consistent with dialog)
                         if 'STRING' in col_type or 'VARCHAR' in col_type:
                             fields.append(QgsField(col_name, QVariant.String))
                         elif 'INT' in col_type or 'BIGINT' in col_type:
@@ -632,7 +632,7 @@ class DatabricksTableItem(QgsDataCollectionItem):
             # Create separate layers for each geometry type
             layers_created = 0
             for geom_type, type_rows in geometry_types.items():
-                if self._create_geometry_layer(layer_name, geom_type, type_rows, fields):
+                if self._create_geometry_layer(layer_name, geom_type, type_rows, fields, max_features):
                     layers_created += 1
             
             if layers_created > 0:
@@ -663,28 +663,77 @@ class DatabricksTableItem(QgsDataCollectionItem):
         
         return wkt_str
     
-    def _create_geometry_layer(self, base_layer_name, geom_type, rows, fields):
-        """Create a memory layer for a specific geometry type"""
+    def _create_geometry_layer(self, base_layer_name, geom_type, rows, fields, max_features=1000):
+        """Create a memory layer for a specific geometry type.
+        
+        Uses direct provider access (no edit mode) to avoid strict type validation
+        issues with NULL/empty datetime values.
+        Uses Multi* geometry types to handle both single and multi-part geometries.
+        """
         try:
             from qgis.core import QgsVectorLayer, QgsFeature, QgsGeometry, QgsWkbTypes, QgsProject
             
+            # Use Multi* geometry types to accept both single and multi-part geometries
+            multi_geom_map = {
+                'Point': 'MultiPoint',
+                'LineString': 'MultiLineString',
+                'Polygon': 'MultiPolygon'
+            }
+            qgis_geom_type = multi_geom_map.get(geom_type, geom_type)
+            
             layer_name = f"{base_layer_name}_{geom_type}"
-            memory_layer = QgsVectorLayer(f"{geom_type}?crs=EPSG:4326", layer_name, "memory")
+            memory_layer = QgsVectorLayer(f"{qgis_geom_type}?crs=EPSG:4326", layer_name, "memory")
             
             if not memory_layer.isValid():
                 return False
             
-            memory_layer.startEditing()
+            # Add fields directly to provider (no edit mode needed)
             provider = memory_layer.dataProvider()
             provider.addAttributes(fields.toList())
             memory_layer.updateFields()
             
-            features_added = 0
+            # Build features list
+            features_to_add = []
+            layer_fields = memory_layer.fields()
+            
             for row in rows:
                 try:
-                    feature = QgsFeature()
-                    attributes = list(row[:-1]) if len(row) > 1 else []
-                    feature.setAttributes(attributes)
+                    feature = QgsFeature(layer_fields)
+                    raw_attrs = list(row[:-1]) if len(row) > 1 else []
+                    
+                    # Process attributes with proper type conversion (consistent with dialog)
+                    processed_attrs = []
+                    for j, attr_value in enumerate(raw_attrs):
+                        if j < len(layer_fields):
+                            field = layer_fields[j]
+                            field_type = field.type()
+                            
+                            if attr_value is None:
+                                processed_attrs.append(None)
+                            elif field_type == QVariant.LongLong:
+                                processed_attrs.append(int(attr_value) if attr_value is not None else None)
+                            elif field_type == QVariant.Double:
+                                processed_attrs.append(float(attr_value) if attr_value is not None else None)
+                            elif field_type == QVariant.DateTime:
+                                # Convert Python datetime to QDateTime (same as dialog)
+                                if hasattr(attr_value, 'year'):
+                                    qdate = QDate(attr_value.year, attr_value.month, attr_value.day)
+                                    qtime = QTime(attr_value.hour, attr_value.minute, attr_value.second, 
+                                                  attr_value.microsecond // 1000 if hasattr(attr_value, 'microsecond') else 0)
+                                    processed_attrs.append(QDateTime(qdate, qtime))
+                                else:
+                                    processed_attrs.append(None)
+                            elif field_type == QVariant.Date:
+                                if hasattr(attr_value, 'year'):
+                                    processed_attrs.append(QDate(attr_value.year, attr_value.month, attr_value.day))
+                                else:
+                                    processed_attrs.append(None)
+                            elif field_type == QVariant.String:
+                                processed_attrs.append(str(attr_value) if attr_value is not None else None)
+                            else:
+                                processed_attrs.append(attr_value)
+                    
+                    feature.setAttributes(processed_attrs)
                     
                     wkt_geom = row[-1] if row else None
                     if wkt_geom and wkt_geom != 'NULL':
@@ -692,22 +741,82 @@ class DatabricksTableItem(QgsDataCollectionItem):
                         geom = QgsGeometry.fromWkt(clean_wkt)
                         
                         if not geom.isEmpty():
+                            # Convert to multi-part for compatibility with Multi* layer
+                            if not geom.isMultipart():
+                                geom.convertToMultiType()
                             feature.setGeometry(geom)
-                            if memory_layer.addFeature(feature):
-                                features_added += 1
-                except:
-                    pass
+                            features_to_add.append(feature)
+                except Exception as e:
+                    # Log errors instead of silently passing
+                    QgsMessageLog.logMessage(
+                        f"Error processing feature: {str(e)}",
+                        "Databricks Browser",
+                        Qgis.Warning
+                    )
             
-            memory_layer.commitChanges()
+            # Add features directly to provider (bypasses edit buffer type validation)
+            if features_to_add:
+                success, added_features = provider.addFeatures(features_to_add)
+                QgsMessageLog.logMessage(
+                    f"addFeatures returned: success={success}, added count={len(added_features) if added_features else 0}",
+                    "Databricks Browser",
+                    Qgis.Info
+                )
+            
             memory_layer.updateExtents()
             
-            if features_added > 0:
+            # Use featureCount() to check actual features - addFeatures can return False even if some succeed
+            final_count = memory_layer.featureCount()
+            
+            QgsMessageLog.logMessage(
+                f"Layer created: {layer_name}, final feature count: {final_count}",
+                "Databricks Browser",
+                Qgis.Info
+            )
+            
+            if final_count > 0:
+                # Store Databricks metadata for refresh functionality
+                self._store_layer_metadata(memory_layer, max_features)
+                
                 QgsProject.instance().addMapLayer(memory_layer)
                 return True
             
             return False
-        except:
+        except Exception as e:
+            QgsMessageLog.logMessage(
+                f"Error creating geometry layer: {str(e)}",
+                "Databricks Browser",
+                Qgis.Critical
+            )
             return False
+    
+    def _store_layer_metadata(self, layer, max_features=1000):
+        """Store Databricks connection and table metadata on the layer for refresh functionality"""
+        try:
+            # Store connection config
+            layer.setCustomProperty("databricks/hostname", self.connection_config.get('hostname', ''))
+            layer.setCustomProperty("databricks/http_path", self.connection_config.get('http_path', ''))
+            layer.setCustomProperty("databricks/access_token", self.connection_config.get('access_token', ''))
+            
+            # Store table info
+            full_name = f"{self.catalog_name}.{self.schema_name}.{self.table_name}"
+            layer.setCustomProperty("databricks/full_name", full_name)
+            layer.setCustomProperty("databricks/geometry_column", self.table_info.get('geometry_column', ''))
+            layer.setCustomProperty("databricks/geometry_type", self.table_info.get('geometry_type', ''))
+            layer.setCustomProperty("databricks/max_features", str(max_features))
+            layer.setCustomProperty("databricks/is_databricks_layer", "true")
+            
+            QgsMessageLog.logMessage(
+                f"Stored Databricks metadata on layer: {layer.name()}",
+                "Databricks Browser",
+                Qgis.Info
+            )
+        except Exception as e:
+            QgsMessageLog.logMessage(
+                f"Error storing layer metadata: {str(e)}",
+                "Databricks Browser",
+                Qgis.Warning
+            )
     
     def _view_data(self):
         """View table data in a query dialog"""
@@ -800,6 +909,13 @@ class DatabricksRootItem(QgsDataCollectionItem):
             self.setIcon(QIcon(icon_path))
         else:
             self.setIcon(QgsApplication.getThemeIcon('/mIconDbSchema.svg'))
+    
+    def sortKey(self):
+        """Return sort key to control position in browser panel.
+        
+        Returns 'aaa' prefix to sort near the top alphabetically.
+        """
+        return "aaa_Databricks"
         
     def createChildren(self):
         """Create connection children from saved connections"""

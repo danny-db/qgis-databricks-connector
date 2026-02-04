@@ -20,6 +20,15 @@ A QGIS plugin that provides direct connectivity to Databricks SQL warehouses, al
 - [Walkthrough (Mac)](https://www.youtube.com/watch?v=M5ZvVWpZnQY)
 - [Windows installation](https://www.youtube.com/watch?v=zpyWuKZTePQ)
 
+## What's New in v1.1.0
+
+- **Update Layer Data from Databricks**: New menu option to refresh layers with latest data from Databricks (select layers → Plugins → Databricks → Update Layer Data from Databricks)
+- **Multi-layer refresh**: Select multiple Databricks layers and update them all at once
+- **Fixed**: Column names with spaces now work correctly (proper backtick escaping)
+- **Fixed**: Polygon/MultiPolygon layers now load correctly from Browser panel
+- **Fixed**: DateTime fields handled properly across all loading methods
+- **Improved**: Consistent behavior between Dialog and Browser panel layer loading
+
 ## Features
 
 - **Direct Databricks SQL Connection**: Connect directly to Databricks SQL warehouses using personal access tokens
@@ -33,6 +42,7 @@ A QGIS plugin that provides direct connectivity to Databricks SQL warehouses, al
 - **Mixed Geometry Handling**: Automatically creates separate layers for different geometry types
 - **Configurable Layer Naming**: Set custom layer name prefix
 - **Flexible Feature Limits**: Load all records or limit to specific count
+- **Layer Data Refresh**: Update existing layers with fresh data from Databricks
 
 ## Requirements
 

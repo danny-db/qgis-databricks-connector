@@ -3,7 +3,7 @@ name=Databricks DBSQL Connector
 qgisMinimumVersion=3.16
 qgisMaximumVersion=3.99
 description=Connect QGIS to Databricks SQL warehouses and access geospatial data directly from Unity Catalog
-version=1.0.0
+version=1.1.0
 author=Danny Wong
 email=danny.wong@databricks.com
 
@@ -54,7 +54,15 @@ about=A QGIS plugin that provides direct connectivity to Databricks SQL warehous
     For installation instructions and documentation, visit the GitHub repository.
 
 # Changelog
-changelog=1.0.0 - Initial release
+changelog=1.1.0 - Layer refresh and bug fixes
+    - New: Update Layer Data from Databricks menu option
+    - New: Multi-layer refresh support (select multiple layers)
+    - Fixed: Column names with spaces now work correctly
+    - Fixed: Polygon/MultiPolygon layers load correctly from Browser
+    - Fixed: DateTime fields handled properly across all methods
+    - Improved: Consistent behavior between Dialog and Browser panel
+    
+    1.0.0 - Initial release
     - Direct Databricks SQL warehouse connectivity
     - Browser Panel integration for browsing Unity Catalog
     - Custom SQL query dialog with database structure browser

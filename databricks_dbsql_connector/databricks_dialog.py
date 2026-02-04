@@ -151,6 +151,27 @@ class LayerLoadingThread(QThread):
         self.layer_name = layer_name
         self.max_features = max_features
     
+    def _escape_identifier(self, identifier):
+        """Escape identifier with backticks for Databricks SQL.
+        
+        This handles identifiers with special characters like hyphens or spaces.
+        """
+        if not identifier:
+            return identifier
+        # Remove existing backticks to avoid double-escaping
+        identifier = identifier.strip('`')
+        return f"`{identifier}`"
+    
+    def _get_escaped_table_ref(self):
+        """Get properly escaped table reference from full_name.
+        
+        Splits catalog.schema.table and escapes each part with backticks.
+        """
+        full_name = self.table_info.get('full_name', '')
+        parts = full_name.split('.')
+        escaped_parts = [self._escape_identifier(part) for part in parts]
+        return '.'.join(escaped_parts)
+    
     def run(self):
         if not DATABRICKS_AVAILABLE:
             self.finished.emit(False, "databricks-sql-connector not installed", None)
@@ -173,7 +194,8 @@ class LayerLoadingThread(QThread):
                 self.progress.emit("Querying table schema...")
                 
                 # Get table schema - EXCLUDE geometry column from attributes
-                table_ref = self.table_info['full_name']
+                # Use escaped table reference to handle special characters (hyphens, spaces, etc.)
+                table_ref = self._get_escaped_table_ref()
                 cursor.execute(f"DESCRIBE {table_ref}")
                 schema_info = cursor.fetchall()
                 
@@ -229,11 +251,13 @@ class LayerLoadingThread(QThread):
                 
                 # Query data - Get attributes AND geometry separately
                 # CRITICAL: Build query to match exactly the fields we added to the layer
-                attribute_fields = [f.name() for f in fields]
+                # Escape all column names with backticks to handle spaces and special characters
+                attribute_fields = [self._escape_identifier(f.name()) for f in fields]
 
                 # Build query with geometry as WKT - only select fields that are in the layer
                 select_clause = attribute_fields.copy()
-                select_clause.append(f"ST_ASWKT({geometry_column}) as geom_wkt")
+                escaped_geom_col = self._escape_identifier(geometry_column)
+                select_clause.append(f"ST_ASWKT({escaped_geom_col}) as geom_wkt")
 
                 query = f"SELECT {', '.join(select_clause)} FROM {table_ref}"
 
@@ -289,15 +313,7 @@ class LayerLoadingThread(QThread):
                     Qgis.Info
                 )
                 
-                # Start editing to add fields and features
-                edit_started = memory_layer.startEditing()
-                QgsMessageLog.logMessage(
-                    f"Started editing mode: {edit_started}, layer editable: {memory_layer.isEditable()}",
-                    "Databricks Connector",
-                    Qgis.Info
-                )
-                
-                # Add fields to layer (NO geometry field)
+                # Add fields directly to provider (no edit mode - avoids strict type validation)
                 provider = memory_layer.dataProvider()
                 add_result = provider.addAttributes(fields.toList())
                 if not add_result:
@@ -311,8 +327,7 @@ class LayerLoadingThread(QThread):
                 
                 QgsMessageLog.logMessage(
                     f"Added {len(fields)} attribute fields to layer. Add result: {add_result}, "
-                    f"layer field count: {memory_layer.fields().count()}, "
-                    f"provider capabilities: {provider.capabilities()}",
+                    f"layer field count: {memory_layer.fields().count()}",
                     "Databricks Connector",
                     Qgis.Info
                 )
@@ -427,29 +442,46 @@ class LayerLoadingThread(QThread):
                                 feature_wkb = geometry.wkbType()
                                 layer_wkb = memory_layer.wkbType()
                                 
+                                # Helper to check if geometry types are compatible
+                                # WKB types: Point=1, LineString=2, Polygon=3, MultiPoint=4, MultiLineString=5, MultiPolygon=6
+                                def is_compatible_geom_type(feature_type, layer_type):
+                                    # Same type is always compatible
+                                    if feature_type == layer_type:
+                                        return True
+                                    # Multi* types are compatible with their single counterparts
+                                    compatible_pairs = {
+                                        (4, 1): True,  # MultiPoint -> Point layer
+                                        (5, 2): True,  # MultiLineString -> LineString layer
+                                        (6, 3): True,  # MultiPolygon -> Polygon layer
+                                        (1, 4): True,  # Point -> MultiPoint layer
+                                        (2, 5): True,  # LineString -> MultiLineString layer
+                                        (3, 6): True,  # Polygon -> MultiPolygon layer
+                                    }
+                                    return compatible_pairs.get((feature_type, layer_type), False)
+                                
                                 # Handle geometry filtering based on layer type
                                 target_geom_type = self.table_info.get('target_geometry_type')
                                 
                                 if target_geom_type:
                                     # This is a specific geometry type layer (LineString or Polygon)
                                     expected_wkb = 2 if target_geom_type == 'ST_LINESTRING' else 3  # LineString or Polygon
-                                    if feature_wkb != expected_wkb:
+                                    if not is_compatible_geom_type(feature_wkb, expected_wkb):
                                         QgsMessageLog.logMessage(
-                                            f"Skipping geometry type {feature_wkb} (expected {expected_wkb}) for feature {i}: {row[1]}",
+                                            f"Skipping geometry type {feature_wkb} (expected {expected_wkb}) for feature {i}",
                                             "Databricks Connector",
                                             Qgis.Info
                                         )
                                         continue
                                 elif self.table_info.get('mixed_geometries', False):
-                                    # For mixed geometries, only add Points to Point layer
-                                    if feature_wkb != 1:  # Not a Point
+                                    # For mixed geometries, only add Points/MultiPoints to Point layer
+                                    if not is_compatible_geom_type(feature_wkb, 1):
                                         QgsMessageLog.logMessage(
-                                            f"Skipping non-Point geometry (type {feature_wkb}) in Point layer for feature {i}: {row[1]}",
+                                            f"Skipping non-Point geometry (type {feature_wkb}) in Point layer for feature {i}",
                                             "Databricks Connector",
                                             Qgis.Info
                                         )
                                         continue
-                                elif feature_wkb != layer_wkb:
+                                elif not is_compatible_geom_type(feature_wkb, layer_wkb):
                                     QgsMessageLog.logMessage(
                                         f"Geometry type mismatch - Feature: {feature_wkb}, Layer: {layer_wkb}. "
                                         f"Skipping feature {i}.",
@@ -500,108 +532,19 @@ class LayerLoadingThread(QThread):
                         )
                         continue
                 
-                # Add features to layer
+                # Add features directly to provider (bypasses edit buffer type validation)
                 if features_to_add:
                     QgsMessageLog.logMessage(
-                        f"Attempting to add {len(features_to_add)} features to layer",
+                        f"Adding {len(features_to_add)} features directly to provider",
                         "Databricks Connector",
                         Qgis.Info
                     )
 
-                    # Debug: Log layer and feature field information
-                    layer_field_names = [f.name() for f in memory_layer.fields()]
-                    layer_field_types = [f.type() for f in memory_layer.fields()]
-                    QgsMessageLog.logMessage(
-                        f"Layer fields: {layer_field_names}",
-                        "Databricks Connector",
-                        Qgis.Info
-                    )
-                    QgsMessageLog.logMessage(
-                        f"Layer field types: {layer_field_types}",
-                        "Databricks Connector",
-                        Qgis.Info
-                    )
-
-                    if features_to_add:
-                        first_feature = features_to_add[0]
-                        first_attr_types = [type(attr) for attr in first_feature.attributes()]
-                        QgsMessageLog.logMessage(
-                            f"First feature attributes count: {len(first_feature.attributes())}, "
-                            f"geometry valid: {not first_feature.geometry().isNull()}, "
-                            f"geometry type: {first_feature.geometry().wkbType()}, "
-                            f"attribute types: {first_attr_types}",
-                            "Databricks Connector",
-                            Qgis.Info
-                        )
-
-                        # Check if feature is valid for the layer
-                        is_valid = first_feature.isValid()
-                        QgsMessageLog.logMessage(
-                            f"First feature is valid: {is_valid}",
-                            "Databricks Connector",
-                            Qgis.Info
-                        )
-
-                    # Try different approaches to add features
-                    successful_adds = 0
+                    # Add all features at once via provider
+                    success, added_features = provider.addFeatures(features_to_add)
                     
-                    # Method 1: Try using layer.addFeature() instead of dataProvider().addFeatures()
                     QgsMessageLog.logMessage(
-                        "Trying Method 1: layer.addFeature()",
-                        "Databricks Connector",
-                        Qgis.Info
-                    )
-                    
-                    for i, feature in enumerate(features_to_add):
-                        try:
-                            # Use the layer's addFeature method instead of dataProvider
-                            add_success = memory_layer.addFeature(feature)
-                            if add_success:
-                                successful_adds += 1
-                                QgsMessageLog.logMessage(
-                                    f"Successfully added feature {i} using layer.addFeature()",
-                                    "Databricks Connector",
-                                    Qgis.Info
-                                )
-                            else:
-                                QgsMessageLog.logMessage(
-                                    f"Failed to add feature {i} using layer.addFeature()",
-                                    "Databricks Connector",
-                                    Qgis.Warning
-                                )
-                                
-                                # Method 2: Try with dataProvider if layer method fails
-                                QgsMessageLog.logMessage(
-                                    f"Trying Method 2 for feature {i}: dataProvider.addFeatures()",
-                                    "Databricks Connector",
-                                    Qgis.Info
-                                )
-                                
-                                single_result = memory_layer.dataProvider().addFeatures([feature])
-                                if single_result[0]:
-                                    successful_adds += 1
-                                    QgsMessageLog.logMessage(
-                                        f"Successfully added feature {i} using dataProvider",
-                                        "Databricks Connector",
-                                        Qgis.Info
-                                    )
-                                else:
-                                    QgsMessageLog.logMessage(
-                                        f"Both methods failed for feature {i}. DataProvider result: {single_result}",
-                                        "Databricks Connector",
-                                        Qgis.Critical
-                                    )
-                                    break
-                        except Exception as e:
-                            QgsMessageLog.logMessage(
-                                f"Exception adding feature {i}: {str(e)}",
-                                "Databricks Connector",
-                                Qgis.Critical
-                            )
-                            break
-
-                    QgsMessageLog.logMessage(
-                        f"Total successful feature additions: {successful_adds} out of {len(features_to_add)}",
+                        f"Provider addFeatures result: success={success}, added={len(added_features) if added_features else 0}",
                         "Databricks Connector",
                         Qgis.Info
                     )
@@ -610,30 +553,6 @@ class LayerLoadingThread(QThread):
                         "No valid features to add to layer",
                         "Databricks Connector",
                         Qgis.Warning
-                    )
-                
-                # Commit changes and update extents
-                if memory_layer.isEditable():
-                    commit_result = memory_layer.commitChanges()
-                    QgsMessageLog.logMessage(
-                        f"Commit changes result: {commit_result}, layer feature count: {memory_layer.featureCount()}",
-                        "Databricks Connector",
-                        Qgis.Info
-                    )
-                    
-                    if not commit_result:
-                        # Try to get commit errors
-                        errors = memory_layer.commitErrors()
-                        QgsMessageLog.logMessage(
-                            f"Commit errors: {errors}",
-                            "Databricks Connector",
-                            Qgis.Critical
-                        )
-                else:
-                    QgsMessageLog.logMessage(
-                        f"Layer not in editing mode, feature count: {memory_layer.featureCount()}",
-                        "Databricks Connector",
-                        Qgis.Info
                     )
                 
                 memory_layer.updateExtents()
@@ -685,15 +604,17 @@ class LayerLoadingThread(QThread):
         """Detect if table contains mixed geometry types and handle accordingly"""
         try:
             with connection.cursor() as cursor:
-                table_ref = self.table_info['full_name']
+                # Use escaped table reference and column name
+                table_ref = self._get_escaped_table_ref()
                 geometry_column = self.table_info['geometry_column']
+                escaped_geom_col = self._escape_identifier(geometry_column)
                 
                 # Query to detect all geometry types in the table
                 # No LIMIT needed since DISTINCT already returns only unique types
                 query = f"""
-                SELECT DISTINCT ST_GEOMETRYTYPE({geometry_column}) as geom_type 
+                SELECT DISTINCT ST_GEOMETRYTYPE({escaped_geom_col}) as geom_type 
                 FROM {table_ref} 
-                WHERE {geometry_column} IS NOT NULL
+                WHERE {escaped_geom_col} IS NOT NULL
                 """
                 
                 QgsMessageLog.logMessage(
@@ -713,24 +634,51 @@ class LayerLoadingThread(QThread):
                         Qgis.Info
                     )
                     
-                    # Check if we have mixed geometry types
-                    if len(geometry_types) > 1:
-                        # Mixed geometry types - store all types for separate layer creation
+                    # Group geometry types by family - Point/MultiPoint, LineString/MultiLineString, Polygon/MultiPolygon
+                    # are all compatible within their family
+                    def get_geom_family(geom_type):
+                        geom_type = geom_type.upper()
+                        if 'POINT' in geom_type:
+                            return 'POINT'
+                        elif 'LINESTRING' in geom_type or 'LINE' in geom_type:
+                            return 'LINESTRING'
+                        elif 'POLYGON' in geom_type:
+                            return 'POLYGON'
+                        return geom_type
+                    
+                    geometry_families = set(get_geom_family(gt) for gt in geometry_types)
+                    
+                    QgsMessageLog.logMessage(
+                        f"Geometry families: {geometry_families}",
+                        "Databricks Connector",
+                        Qgis.Info
+                    )
+                    
+                    # Check if we have mixed geometry FAMILIES (truly incompatible types)
+                    if len(geometry_families) > 1:
+                        # Mixed geometry families - store all types for separate layer creation
                         self.table_info['geometry_type'] = 'MIXED'
                         self.table_info['mixed_geometries'] = True
-                        self.table_info['geometry_types_list'] = geometry_types
+                        self.table_info['geometry_types_list'] = list(geometry_families)
                         QgsMessageLog.logMessage(
-                            f"Mixed geometry types detected: {geometry_types}. Will create separate layers for each type.",
+                            f"Mixed geometry families detected: {geometry_families}. Will create separate layers for each type.",
                             "Databricks Connector",
                             Qgis.Info
                         )
                     else:
-                        # Single geometry type
-                        detected_type = geometry_types[0]
+                        # Single geometry family (e.g., both Polygon and MultiPolygon are POLYGON family)
+                        detected_family = list(geometry_families)[0]
+                        # Map family back to a standard type for layer creation
+                        family_to_type = {
+                            'POINT': 'ST_POINT',
+                            'LINESTRING': 'ST_LINESTRING',
+                            'POLYGON': 'ST_POLYGON'
+                        }
+                        detected_type = family_to_type.get(detected_family, geometry_types[0])
                         self.table_info['geometry_type'] = detected_type
                         self.table_info['mixed_geometries'] = False
                         QgsMessageLog.logMessage(
-                            f"Single geometry type detected: {detected_type}",
+                            f"Single geometry family detected: {detected_family} -> {detected_type}",
                             "Databricks Connector",
                             Qgis.Info
                         )
@@ -1295,9 +1243,21 @@ import sys
         if success and layer:
             # CRITICAL: Check layer validity before adding
             if layer.isValid():
+                # Store Databricks metadata on the layer for refresh functionality
+                self._store_layer_metadata(layer)
+                
                 # Add layer to QGIS project
                 QgsProject.instance().addMapLayer(layer)
                 self.loaded_layers += 1
+                
+                # CRITICAL: Stop editing mode AFTER adding to project
+                # Memory layers may still be in edit mode after commitChanges()
+                if layer.isEditable():
+                    # Use commitChanges first to save any pending changes
+                    layer.commitChanges()
+                    # If still editable, force stop with rollBack (no changes should be pending)
+                    if layer.isEditable():
+                        layer.rollBack()
                 
                 QgsMessageLog.logMessage(
                     f"Successfully added layer: {layer.name()} with {layer.featureCount()} features",
@@ -1418,9 +1378,17 @@ import sys
     def on_additional_layer_loaded(self, success, message, layer):
         """Handle additional layer loading results"""
         if success and layer and layer.isValid():
+            # Ensure editing is off before adding to project
+            if layer.isEditable():
+                layer.commitChanges()
+            
             # Add layer to QGIS project
             QgsProject.instance().addMapLayer(layer)
             self.loaded_layers += 1
+            
+            # Double-check editing is off after adding
+            if layer.isEditable():
+                layer.rollBack()
             
             QgsMessageLog.logMessage(
                 f"Successfully added additional layer: {layer.name()} with {layer.featureCount()} features",
@@ -1430,6 +1398,42 @@ import sys
         else:
             QgsMessageLog.logMessage(
                 f"Failed to load additional layer: {message}",
+                "Databricks Connector",
+                Qgis.Warning
+            )
+    
+    def _store_layer_metadata(self, layer):
+        """Store Databricks connection and table metadata on the layer for refresh functionality"""
+        try:
+            if not hasattr(self, 'loading_thread') or not self.loading_thread:
+                return
+            
+            # Get connection config
+            hostname = self.hostname_edit.text().strip()
+            http_path = self.http_path_edit.text().strip()
+            access_token = self.access_token_edit.text().strip()
+            
+            # Store metadata as custom properties
+            layer.setCustomProperty("databricks/hostname", hostname)
+            layer.setCustomProperty("databricks/http_path", http_path)
+            layer.setCustomProperty("databricks/access_token", access_token)
+            
+            # Store table info
+            table_info = self.loading_thread.table_info
+            layer.setCustomProperty("databricks/full_name", table_info.get('full_name', ''))
+            layer.setCustomProperty("databricks/geometry_column", table_info.get('geometry_column', ''))
+            layer.setCustomProperty("databricks/geometry_type", table_info.get('geometry_type', ''))
+            layer.setCustomProperty("databricks/max_features", str(self.loading_thread.max_features))
+            layer.setCustomProperty("databricks/is_databricks_layer", "true")
+            
+            QgsMessageLog.logMessage(
+                f"Stored Databricks metadata on layer: {layer.name()}",
+                "Databricks Connector",
+                Qgis.Info
+            )
+        except Exception as e:
+            QgsMessageLog.logMessage(
+                f"Error storing layer metadata: {str(e)}",
                 "Databricks Connector",
                 Qgis.Warning
             )
@@ -1985,6 +1989,10 @@ class QueryLayerCreationThread(QThread):
             memory_layer.commitChanges()
             memory_layer.updateExtents()
             
+            # Ensure editing is off
+            if memory_layer.isEditable():
+                memory_layer.rollBack()
+            
             # Check if we had geometry issues and inform the user
             total_features = len(rows)
             successful_features = memory_layer.featureCount()
@@ -2213,6 +2221,10 @@ class QueryLayerCreationThread(QThread):
             
             memory_layer.updateExtents()
             
+            # Ensure editing is off
+            if memory_layer.isEditable():
+                memory_layer.rollBack()
+            
             final_count = memory_layer.featureCount()
             QgsMessageLog.logMessage(f"FINAL: Layer has {final_count} features", "Query Dialog", Qgis.Info)
             
@@ -2314,6 +2326,10 @@ class QueryLayerCreationThread(QThread):
             provider.addFeatures(features_to_add)
             memory_layer.commitChanges()
             memory_layer.updateExtents()
+            
+            # Ensure editing is off
+            if memory_layer.isEditable():
+                memory_layer.rollBack()
             
             QgsMessageLog.logMessage(
                 f"Created {geom_type} layer: {memory_layer.featureCount()} features, {successful_geometries} with valid geometries",
