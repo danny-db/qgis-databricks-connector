@@ -853,6 +853,42 @@ class DatabricksDialog(QDialog):
         self.max_features_edit.setText("")  # Empty by default = unlimited
         options_layout.addWidget(self.max_features_edit, 1, 1)
         
+        # Live Mode checkbox
+        self.live_mode_checkbox = QCheckBox("Live Mode (auto-refresh on viewport change)")
+        self.live_mode_checkbox.setToolTip(
+            "When enabled, the layer will automatically refresh when you pan or zoom.\n"
+            "Data is filtered to the current viewport extent using ST_INTERSECTS.\n"
+            "Recommended for large tables where loading all data is impractical."
+        )
+        self.live_mode_checkbox.stateChanged.connect(self._on_live_mode_changed)
+        options_layout.addWidget(self.live_mode_checkbox, 2, 0, 1, 2)
+        
+        # Live mode options (initially hidden)
+        self.live_options_widget = QWidget()
+        live_options_layout = QGridLayout(self.live_options_widget)
+        live_options_layout.setContentsMargins(20, 0, 0, 0)
+        
+        live_options_layout.addWidget(QLabel("Refresh Delay (ms):"), 0, 0)
+        self.live_refresh_delay_edit = QLineEdit()
+        self.live_refresh_delay_edit.setText("500")
+        self.live_refresh_delay_edit.setToolTip("Delay before refreshing after pan/zoom stops (in milliseconds)")
+        live_options_layout.addWidget(self.live_refresh_delay_edit, 0, 1)
+        
+        live_options_layout.addWidget(QLabel("Extent Buffer (%):"), 1, 0)
+        self.live_buffer_edit = QLineEdit()
+        self.live_buffer_edit.setText("10")
+        self.live_buffer_edit.setToolTip("Fetch slightly larger area than visible to reduce refreshes on small pans")
+        live_options_layout.addWidget(self.live_buffer_edit, 1, 1)
+        
+        live_options_layout.addWidget(QLabel("Max Features:"), 2, 0)
+        self.live_max_features_edit = QLineEdit()
+        self.live_max_features_edit.setText("10000")
+        self.live_max_features_edit.setToolTip("Safety limit for features per viewport refresh")
+        live_options_layout.addWidget(self.live_max_features_edit, 2, 1)
+        
+        self.live_options_widget.setVisible(False)
+        options_layout.addWidget(self.live_options_widget, 3, 0, 1, 2)
+        
         layout.addWidget(options_group)
         
         # Button box
@@ -909,6 +945,19 @@ class DatabricksDialog(QDialog):
                 "Databricks Connector",
                 Qgis.Warning
             )
+    
+    def _on_live_mode_changed(self, state):
+        """Handle live mode checkbox state change"""
+        is_live = state == Qt.Checked
+        self.live_options_widget.setVisible(is_live)
+        
+        # Update max features placeholder when live mode changes
+        if is_live:
+            self.max_features_edit.setEnabled(False)
+            self.max_features_edit.setPlaceholderText("(Controlled by Live Mode settings)")
+        else:
+            self.max_features_edit.setEnabled(True)
+            self.max_features_edit.setPlaceholderText("Leave empty for all records, or enter a number (e.g., 1000)")
     
     def load_selected_connection(self, connection_name):
         """Load selected connection details"""
@@ -1185,15 +1234,38 @@ import sys
         access_token = self.access_token_edit.text().strip()
         layer_prefix = self.layer_prefix_edit.text().strip()
         
-        # Parse max_features: empty = 0 (unlimited), otherwise parse as int
-        max_features_text = self.max_features_edit.text().strip()
-        if not max_features_text:
-            max_features = 0  # 0 means no limit
-        else:
+        # Check if live mode is enabled
+        self._live_mode_enabled = self.live_mode_checkbox.isChecked()
+        
+        if self._live_mode_enabled:
+            # Use live mode settings
             try:
-                max_features = int(max_features_text)
+                self._live_refresh_delay = int(self.live_refresh_delay_edit.text().strip())
             except ValueError:
-                max_features = 0  # Default to unlimited on invalid input
+                self._live_refresh_delay = 500
+            
+            try:
+                self._live_buffer_percent = float(self.live_buffer_edit.text().strip()) / 100.0
+            except ValueError:
+                self._live_buffer_percent = 0.1
+            
+            try:
+                max_features = int(self.live_max_features_edit.text().strip())
+            except ValueError:
+                max_features = 10000
+            
+            # Add "_live" suffix to layer prefix for live layers
+            layer_prefix = layer_prefix + "_live" if not layer_prefix.endswith("_live") else layer_prefix
+        else:
+            # Parse max_features: empty = 0 (unlimited), otherwise parse as int
+            max_features_text = self.max_features_edit.text().strip()
+            if not max_features_text:
+                max_features = 0  # 0 means no limit
+            else:
+                try:
+                    max_features = int(max_features_text)
+                except ValueError:
+                    max_features = 0  # Default to unlimited on invalid input
         
         # Load layers one by one
         self.layers_to_load = selected_tables.copy()
@@ -1263,14 +1335,65 @@ import sys
                     if layer.isEditable():
                         layer.rollBack()
                 
+                # Check if live mode is enabled - create live layer manager
+                if getattr(self, '_live_mode_enabled', False):
+                    try:
+                        from .databricks_live_layer import create_live_layer
+                        
+                        # Get connection config
+                        connection_config = {
+                            'hostname': self.hostname_edit.text().strip(),
+                            'http_path': self.http_path_edit.text().strip(),
+                            'access_token': self.access_token_edit.text().strip()
+                        }
+                        
+                        # Get table info from loading thread
+                        table_info = {}
+                        if hasattr(self.loading_thread, 'table_info'):
+                            table_info = {
+                                'full_name': self.loading_thread.table_info.get('full_name', ''),
+                                'geometry_column': self.loading_thread.table_info.get('geometry_column', ''),
+                                'geometry_type': self.loading_thread.table_info.get('geometry_type', '')
+                            }
+                        
+                        # Create live layer manager
+                        manager = create_live_layer(
+                            self.iface,
+                            layer,
+                            connection_config,
+                            table_info,
+                            refresh_delay_ms=getattr(self, '_live_refresh_delay', 500),
+                            buffer_percent=getattr(self, '_live_buffer_percent', 0.1),
+                            max_features=self.loading_thread.max_features if hasattr(self.loading_thread, 'max_features') else 10000
+                        )
+                        
+                        # Mark layer as live layer
+                        layer.setCustomProperty("databricks/is_live_layer", "true")
+                        
+                        QgsMessageLog.logMessage(
+                            f"Created live layer manager for: {layer.name()}",
+                            "Databricks Connector",
+                            Qgis.Info
+                        )
+                        
+                        # Trigger initial refresh
+                        manager.force_refresh()
+                        
+                    except Exception as live_e:
+                        QgsMessageLog.logMessage(
+                            f"Error creating live layer manager: {str(live_e)}",
+                            "Databricks Connector",
+                            Qgis.Warning
+                        )
+                
                 QgsMessageLog.logMessage(
                     f"Successfully added layer: {layer.name()} with {layer.featureCount()} features",
                     "Databricks Connector",
                     Qgis.Info
                 )
                 
-                # Zoom to layer extent if it has features
-                if layer.featureCount() > 0:
+                # Zoom to layer extent if it has features (skip for live layers - they'll refresh to viewport)
+                if layer.featureCount() > 0 and not getattr(self, '_live_mode_enabled', False):
                     self.iface.mapCanvas().setExtent(layer.extent())
                     self.iface.mapCanvas().refresh()
                 
@@ -1306,15 +1429,25 @@ import sys
         access_token = self.access_token_edit.text().strip()
         layer_prefix = self.layer_prefix_edit.text().strip()
         
-        # Parse max_features: empty = 0 (unlimited), otherwise parse as int
-        max_features_text = self.max_features_edit.text().strip()
-        if not max_features_text:
-            max_features = 0  # 0 means no limit
-        else:
+        # Use live mode settings if enabled
+        if getattr(self, '_live_mode_enabled', False):
             try:
-                max_features = int(max_features_text)
+                max_features = int(self.live_max_features_edit.text().strip())
             except ValueError:
-                max_features = 0  # Default to unlimited on invalid input
+                max_features = 10000
+            # Add "_live" suffix if not already present
+            if not layer_prefix.endswith("_live"):
+                layer_prefix = layer_prefix + "_live"
+        else:
+            # Parse max_features: empty = 0 (unlimited), otherwise parse as int
+            max_features_text = self.max_features_edit.text().strip()
+            if not max_features_text:
+                max_features = 0  # 0 means no limit
+            else:
+                try:
+                    max_features = int(max_features_text)
+                except ValueError:
+                    max_features = 0  # Default to unlimited on invalid input
         
         # Load next layer
         self.load_next_layer(hostname, http_path, access_token, layer_prefix, max_features)
