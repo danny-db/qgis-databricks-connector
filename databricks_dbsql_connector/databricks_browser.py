@@ -481,6 +481,11 @@ class DatabricksTableItem(QgsDataCollectionItem):
             add_all_action = QAction("Add All Features", parent)
             add_all_action.triggered.connect(lambda: self._add_layer(max_features=0))
             actions.append(add_all_action)
+            
+            # Add as Live Layer action (viewport-based auto-refresh)
+            add_live_action = QAction("Add as Live Layer (Viewport)", parent)
+            add_live_action.triggered.connect(self._add_live_layer)
+            actions.append(add_live_action)
         
         # View data action (for both geometry and non-geometry tables)
         view_action = QAction("View Data...", parent)
@@ -821,6 +826,161 @@ class DatabricksTableItem(QgsDataCollectionItem):
                 f"Error storing layer metadata: {str(e)}",
                 "Databricks Browser",
                 Qgis.Warning
+            )
+    
+    def _add_live_layer(self):
+        """Add this table as a live layer that auto-refreshes based on viewport"""
+        try:
+            if not DATABRICKS_AVAILABLE:
+                QgsMessageLog.logMessage(
+                    "databricks-sql-connector not installed",
+                    "Databricks Browser",
+                    Qgis.Critical
+                )
+                return
+            
+            from qgis.core import QgsProject, QgsVectorLayer, QgsFields, QgsField, QgsWkbTypes
+            from qgis.utils import iface
+            from PyQt5.QtCore import QVariant
+            import databricks.sql as sql
+            
+            # Import live layer manager
+            from .databricks_live_layer import create_live_layer
+            
+            # Get layer prefix from settings
+            settings = QSettings()
+            layer_prefix = settings.value("DatabricksConnector/LayerPrefix", "databricks_")
+            
+            # Build layer name with live indicator
+            layer_name = f"{layer_prefix}{self.table_name}_live"
+            
+            QgsMessageLog.logMessage(
+                f"Creating live layer: {layer_name}",
+                "Databricks Browser",
+                Qgis.Info
+            )
+            
+            # Connect to Databricks to get schema
+            connection = sql.connect(
+                server_hostname=self.connection_config['hostname'],
+                http_path=self.connection_config['http_path'],
+                access_token=self.connection_config['access_token']
+            )
+            
+            with connection.cursor() as cursor:
+                # Get table schema
+                table_ref = self._get_table_reference()
+                cursor.execute(f"DESCRIBE {table_ref}")
+                schema_info = cursor.fetchall()
+                
+                # Build QGIS fields - exclude geometry column
+                fields = QgsFields()
+                geometry_column = self.table_info['geometry_column']
+                
+                for row in schema_info:
+                    col_name = row[0]
+                    col_type = row[1].upper()
+                    
+                    if col_name.lower() != geometry_column.lower() and not col_type.startswith(('GEOGRAPHY', 'GEOMETRY')):
+                        if 'STRING' in col_type or 'VARCHAR' in col_type:
+                            fields.append(QgsField(col_name, QVariant.String))
+                        elif 'INT' in col_type or 'BIGINT' in col_type:
+                            fields.append(QgsField(col_name, QVariant.LongLong))
+                        elif 'DOUBLE' in col_type or 'FLOAT' in col_type or 'DECIMAL' in col_type:
+                            fields.append(QgsField(col_name, QVariant.Double))
+                        elif 'DATE' in col_type:
+                            fields.append(QgsField(col_name, QVariant.Date))
+                        elif 'TIMESTAMP' in col_type:
+                            fields.append(QgsField(col_name, QVariant.DateTime))
+                        else:
+                            fields.append(QgsField(col_name, QVariant.String))
+            
+            connection.close()
+            
+            # Detect geometry type for layer creation
+            geom_type_str = self.table_info.get('geometry_type', 'GEOMETRY').upper()
+            
+            # Use MultiPolygon as default to handle mixed geometry types
+            if 'POINT' in geom_type_str:
+                qgis_geom_type = 'MultiPoint'
+            elif 'LINE' in geom_type_str:
+                qgis_geom_type = 'MultiLineString'
+            else:
+                qgis_geom_type = 'MultiPolygon'
+            
+            # Create empty memory layer
+            memory_layer = QgsVectorLayer(
+                f"{qgis_geom_type}?crs=EPSG:4326",
+                layer_name,
+                "memory"
+            )
+            
+            if not memory_layer.isValid():
+                QgsMessageLog.logMessage(
+                    f"Failed to create memory layer",
+                    "Databricks Browser",
+                    Qgis.Critical
+                )
+                return
+            
+            # Add fields to layer
+            provider = memory_layer.dataProvider()
+            provider.addAttributes(fields.toList())
+            memory_layer.updateFields()
+            
+            # Store metadata
+            self._store_layer_metadata(memory_layer, max_features=10000)
+            memory_layer.setCustomProperty("databricks/is_live_layer", "true")
+            
+            # Prepare table info for live layer manager
+            table_info = {
+                'full_name': f"{self.catalog_name}.{self.schema_name}.{self.table_name}",
+                'geometry_column': self.table_info.get('geometry_column', ''),
+                'geometry_type': self.table_info.get('geometry_type', '')
+            }
+            
+            # Add layer to project
+            QgsProject.instance().addMapLayer(memory_layer)
+            
+            # Create live layer manager (this connects to canvas extent changes)
+            manager = create_live_layer(
+                iface,
+                memory_layer,
+                self.connection_config,
+                table_info,
+                refresh_delay_ms=500,
+                buffer_percent=0.1,
+                max_features=10000
+            )
+            
+            # Trigger initial refresh based on current viewport
+            manager.force_refresh()
+            
+            QgsMessageLog.logMessage(
+                f"Successfully created live layer: {layer_name}",
+                "Databricks Browser",
+                Qgis.Info
+            )
+            
+            # Show info message
+            QMessageBox.information(
+                QgsApplication.instance().activeWindow(),
+                "Live Layer Created",
+                f"Live layer '{layer_name}' created successfully.\n\n"
+                "The layer will automatically refresh when you pan or zoom the map.\n\n"
+                "Note: Data is filtered to the current viewport extent."
+            )
+            
+        except Exception as e:
+            QgsMessageLog.logMessage(
+                f"Error creating live layer: {str(e)}",
+                "Databricks Browser",
+                Qgis.Critical
+            )
+            QMessageBox.critical(
+                QgsApplication.instance().activeWindow(),
+                "Error",
+                f"Failed to create live layer: {str(e)}"
             )
     
     def _view_data(self):

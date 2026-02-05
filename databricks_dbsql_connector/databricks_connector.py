@@ -142,6 +142,15 @@ class DatabricksConnector:
             add_to_toolbar=False,  # Only in menu
             parent=self.iface.mainWindow()
         )
+        
+        # Create action to toggle live mode for selected layer
+        self.add_action(
+            icon_path,
+            text=self.tr('Toggle Live Mode for Layer'),
+            callback=self.toggle_live_mode,
+            add_to_toolbar=False,  # Only in menu
+            parent=self.iface.mainWindow()
+        )
 
         # Register the custom data provider only if dependencies are available
         if DATABRICKS_AVAILABLE:
@@ -168,6 +177,22 @@ class DatabricksConnector:
 
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""
+        
+        # Cleanup live layer managers
+        try:
+            from .databricks_live_layer import LiveLayerRegistry
+            LiveLayerRegistry().cleanup_all()
+            QgsMessageLog.logMessage(
+                "Live layer managers cleaned up successfully",
+                "Databricks Connector",
+                Qgis.Info
+            )
+        except Exception as e:
+            QgsMessageLog.logMessage(
+                f"Error cleaning up live layer managers: {str(e)}",
+                "Databricks Connector",
+                Qgis.Warning
+            )
         
         # Safely unregister the data provider - compatible with different QGIS versions
         if self.provider_metadata and DATABRICKS_AVAILABLE:
@@ -773,6 +798,127 @@ class DatabricksConnector:
             # Roll back any partial changes
             if layer.isEditable():
                 layer.rollBack()
+
+    def toggle_live_mode(self):
+        """Toggle live mode for selected Databricks layers"""
+        from qgis.core import QgsProject, QgsVectorLayer
+        
+        # Get all selected layers from layer tree
+        selected_layers = self.iface.layerTreeView().selectedLayers()
+        
+        if not selected_layers:
+            QMessageBox.warning(
+                self.iface.mainWindow(),
+                "No Layer Selected",
+                "Please select a Databricks layer to toggle live mode."
+            )
+            return
+        
+        # Get the first selected Databricks layer
+        layer = None
+        for l in selected_layers:
+            if isinstance(l, QgsVectorLayer):
+                is_databricks = l.customProperty("databricks/is_databricks_layer", "false") == "true"
+                if is_databricks:
+                    layer = l
+                    break
+        
+        if not layer:
+            QMessageBox.warning(
+                self.iface.mainWindow(),
+                "No Databricks Layer",
+                "Please select a Databricks layer to toggle live mode."
+            )
+            return
+        
+        try:
+            from .databricks_live_layer import LiveLayerRegistry, create_live_layer
+            
+            registry = LiveLayerRegistry()
+            existing_manager = registry.get(layer.id())
+            
+            if existing_manager:
+                # Disable live mode
+                registry.unregister(layer.id())
+                layer.setCustomProperty("databricks/is_live_layer", "false")
+                
+                QMessageBox.information(
+                    self.iface.mainWindow(),
+                    "Live Mode Disabled",
+                    f"Live mode has been disabled for layer '{layer.name()}'.\n\n"
+                    "The layer will no longer auto-refresh when you pan or zoom."
+                )
+                
+                QgsMessageLog.logMessage(
+                    f"Live mode disabled for layer: {layer.name()}",
+                    "Databricks Connector",
+                    Qgis.Info
+                )
+            else:
+                # Enable live mode
+                # Get connection config from layer properties
+                connection_config = {
+                    'hostname': layer.customProperty("databricks/hostname", ""),
+                    'http_path': layer.customProperty("databricks/http_path", ""),
+                    'access_token': layer.customProperty("databricks/access_token", "")
+                }
+                
+                if not all(connection_config.values()):
+                    QMessageBox.warning(
+                        self.iface.mainWindow(),
+                        "Missing Connection Info",
+                        "This layer is missing connection information.\n"
+                        "Please refresh the layer first using 'Update Layer Data from Databricks'."
+                    )
+                    return
+                
+                table_info = {
+                    'full_name': layer.customProperty("databricks/full_name", ""),
+                    'geometry_column': layer.customProperty("databricks/geometry_column", ""),
+                    'geometry_type': layer.customProperty("databricks/geometry_type", "")
+                }
+                
+                # Create live layer manager
+                manager = create_live_layer(
+                    self.iface,
+                    layer,
+                    connection_config,
+                    table_info,
+                    refresh_delay_ms=500,
+                    buffer_percent=0.1,
+                    max_features=10000
+                )
+                
+                layer.setCustomProperty("databricks/is_live_layer", "true")
+                
+                # Trigger initial refresh
+                manager.force_refresh()
+                
+                QMessageBox.information(
+                    self.iface.mainWindow(),
+                    "Live Mode Enabled",
+                    f"Live mode has been enabled for layer '{layer.name()}'.\n\n"
+                    "The layer will automatically refresh when you pan or zoom.\n"
+                    "Data is filtered to the current viewport extent."
+                )
+                
+                QgsMessageLog.logMessage(
+                    f"Live mode enabled for layer: {layer.name()}",
+                    "Databricks Connector",
+                    Qgis.Info
+                )
+                
+        except Exception as e:
+            QMessageBox.critical(
+                self.iface.mainWindow(),
+                "Error",
+                f"Failed to toggle live mode: {str(e)}"
+            )
+            QgsMessageLog.logMessage(
+                f"Error toggling live mode: {str(e)}",
+                "Databricks Connector",
+                Qgis.Critical
+            )
 
     def run(self):
         """Run method that performs all the real work"""
