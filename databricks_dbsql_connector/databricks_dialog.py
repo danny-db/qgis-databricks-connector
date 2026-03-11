@@ -19,7 +19,6 @@ from qgis.core import (
     QgsCoordinateReferenceSystem
 )
 from qgis.PyQt.QtCore import QVariant, QDateTime, QDate, QTime
-from . import _qt6_compat  # noqa: F401 — patches Qt5 enum names for Qt6
 
 # Check if databricks is available
 try:

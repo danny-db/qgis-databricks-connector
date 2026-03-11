@@ -5,6 +5,8 @@ This plugin provides direct connectivity to Databricks SQL warehouses,
 allowing you to load and display geospatial data from Unity Catalog tables.
 """
 
+from . import _qt6_compat  # noqa: F401  — patches Qt5/Qt6 compat shims early
+
 
 def classFactory(iface):
     """Load DatabricksConnector class from databricks_connector module.

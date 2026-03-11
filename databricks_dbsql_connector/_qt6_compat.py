@@ -61,6 +61,13 @@ try:
 except ImportError:
     pass
 
+# ── QDialog.exec() ──────────────────────────────────────────────────
+# exec() was added as an alias in later PyQt5; exec_() was removed in PyQt6.
+# Patch old PyQt5 so we can use exec() everywhere.
+from qgis.PyQt.QtWidgets import QDialog
+if not hasattr(QDialog, 'exec'):
+    QDialog.exec = QDialog.exec_
+
 # ── QLineEdit enums ─────────────────────────────────────────────────
 try:
     from qgis.PyQt.QtWidgets import QLineEdit

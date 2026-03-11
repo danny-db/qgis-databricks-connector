@@ -6,7 +6,6 @@ from typing import List, Dict, Any, Optional
 from qgis.PyQt.QtCore import QThread, pyqtSignal, QSettings, QDate, QTime, QDateTime, QVariant
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction, QMenu, QMessageBox, QInputDialog
-from . import _qt6_compat  # noqa: F401 — patches Qt5 enum names for Qt6
 from qgis.core import (
     QgsDataItem, QgsDataItemProvider, QgsDataProvider,
     QgsDataCollectionItem, QgsLayerItem, QgsDataSourceUri,
