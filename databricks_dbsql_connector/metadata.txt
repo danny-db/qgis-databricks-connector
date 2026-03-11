@@ -3,7 +3,7 @@ name=Databricks DBSQL Connector
 qgisMinimumVersion=3.16
 qgisMaximumVersion=4.99
 description=Connect QGIS to Databricks SQL warehouses and access geospatial data directly from Unity Catalog
-version=1.1.1
+version=1.2.0
 author=Danny Wong
 email=danny.wong@databricks.com
 
@@ -54,7 +54,14 @@ about=A QGIS plugin that provides direct connectivity to Databricks SQL warehous
     For installation instructions and documentation, visit the GitHub repository.
 
 # Changelog
-changelog=1.1.1 - Security improvements
+changelog=1.2.0 - QGIS 4 / Qt6 compatibility
+    - New: QGIS 4.0 (Qt6/PyQt6) support while maintaining QGIS 3.16+ compatibility
+    - Fixed: Plugin load failures caused by removed Qt5 unscoped enums
+    - Fixed: Dependency installation on QGIS 4 macOS (switched to in-process pip)
+    - Fixed: Replaced deprecated exec_() with exec()
+    - Fixed: Hardcoded PyQt5 import replaced with portable qgis.PyQt abstraction
+
+    1.1.1 - Security improvements
     - Security: Use parameterized queries for information_schema lookups
     - Security: Added documentation for escaped SQL identifiers
     
