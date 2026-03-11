@@ -6,6 +6,7 @@ import sys
 from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, Qt, QProcess, QDate, QTime, QDateTime, QVariant
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction, QMessageBox, QProgressDialog, QApplication
+from . import _qt6_compat  # noqa: F401 — patches Qt5 enum names for Qt6
 from qgis.core import (
     QgsApplication,
     QgsProviderRegistry,
@@ -288,183 +289,91 @@ class DatabricksConnector:
             "Databricks Connector - Install Dependencies",
             "The Databricks SQL Connector package is required but not installed.\n\n"
             "Would you like to install it now?\n\n"
-            "This will run: pip install databricks-sql-connector\n\n"
+            "This will install: databricks-sql-connector\n\n"
             "Note: QGIS will need to be restarted after installation.",
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.Yes
         )
-        
+
         if reply == QMessageBox.Yes:
             self._start_installation()
-    
-    def _find_qgis_pip(self):
-        """Find pip executable bundled with QGIS.
-        
-        Returns tuple: (executable, args_list) where executable is either
-        pip3 directly or python3, and args_list contains the command arguments.
+
+    @staticmethod
+    def _run_pip(pip_args):
+        """Run a pip command in-process, following the enmap-box pattern.
+
+        Calls pip's internal API directly so the installation works even when
+        the bundled Python binary cannot run standalone (QGIS 4 macOS).
+        Captures stdout/stderr to avoid polluting the QGIS Python console.
+
+        Returns (success: bool, stdout: str, stderr: str).
         """
-        import platform
-        system = platform.system()
-        tried_paths = []
-        
-        if system == 'Darwin':  # macOS
-            # QGIS on macOS: binaries are in Contents/MacOS/bin/
-            # sys.executable = /Applications/QGIS.app/Contents/MacOS/QGIS
-            qgis_dir = os.path.dirname(sys.executable)
-            bin_dir = os.path.join(qgis_dir, 'bin')
-            
-            # Try pip3 directly first (preferred)
-            pip_path = os.path.join(bin_dir, 'pip3')
-            tried_paths.append(pip_path)
-            if os.path.exists(pip_path):
-                return pip_path, ['install', 'databricks-sql-connector'], tried_paths
-            
-            # Try pip
-            pip_path = os.path.join(bin_dir, 'pip')
-            tried_paths.append(pip_path)
-            if os.path.exists(pip_path):
-                return pip_path, ['install', 'databricks-sql-connector'], tried_paths
-            
-            # Try python3 -m pip
-            python_path = os.path.join(bin_dir, 'python3')
-            tried_paths.append(python_path)
-            if os.path.exists(python_path):
-                return python_path, ['-m', 'pip', 'install', 'databricks-sql-connector'], tried_paths
-                
-        elif system == 'Windows':
-            # QGIS on Windows: Python is in apps/PythonXX/
-            qgis_root = os.path.dirname(os.path.dirname(sys.executable))
-            apps_dir = os.path.join(qgis_root, 'apps')
-            
-            if os.path.exists(apps_dir):
-                for item in os.listdir(apps_dir):
-                    if item.lower().startswith('python'):
-                        python_dir = os.path.join(apps_dir, item)
-                        
-                        # Try Scripts/pip.exe
-                        pip_path = os.path.join(python_dir, 'Scripts', 'pip.exe')
-                        tried_paths.append(pip_path)
-                        if os.path.exists(pip_path):
-                            return pip_path, ['install', 'databricks-sql-connector'], tried_paths
-                        
-                        # Try python.exe -m pip
-                        python_path = os.path.join(python_dir, 'python.exe')
-                        tried_paths.append(python_path)
-                        if os.path.exists(python_path):
-                            return python_path, ['-m', 'pip', 'install', 'databricks-sql-connector'], tried_paths
-        
-        else:  # Linux
-            import shutil
-            # Try pip3 in PATH
-            pip_path = shutil.which('pip3')
-            if pip_path:
-                tried_paths.append(pip_path)
-                return pip_path, ['install', 'databricks-sql-connector'], tried_paths
-            
-            python_path = shutil.which('python3')
-            if python_path:
-                tried_paths.append(python_path)
-                return python_path, ['-m', 'pip', 'install', 'databricks-sql-connector'], tried_paths
-        
-        return None, None, tried_paths
-    
+        from io import StringIO
+        _orig_out, _orig_err = sys.stdout, sys.stderr
+        sys.stdout = StringIO()
+        sys.stderr = StringIO()
+        success = False
+        msg_out = msg_err = None
+        try:
+            from pip._internal.cli.main_parser import parse_command
+            from pip._internal.commands import create_command
+
+            cmd_name, cmd_args = parse_command(pip_args)
+            cmd = create_command(cmd_name, isolated=("--isolated" in cmd_args))
+            result = cmd.main(cmd_args)
+            msg_out = sys.stdout.getvalue()
+            msg_err = sys.stderr.getvalue()
+            success = (result == 0)
+        except Exception as ex:
+            msg_err = str(ex)
+        finally:
+            sys.stdout = _orig_out
+            sys.stderr = _orig_err
+        return success, (msg_out or ""), (msg_err or "")
+
     def _start_installation(self):
-        """Start the dependency installation using QProcess (Qt-native, avoids QGIS conflicts)."""
-        # Find pip or python executable
-        executable, args, tried_paths = self._find_qgis_pip()
-        
-        # Log what we found
-        QgsMessageLog.logMessage(
-            f"Searched for pip/python in: {tried_paths}",
-            "Databricks Connector",
-            Qgis.Info
-        )
-        
-        if executable:
-            QgsMessageLog.logMessage(
-                f"Found executable: {executable}",
-                "Databricks Connector",
-                Qgis.Info
-            )
-        
-        # If not found, show manual instructions
-        if not executable:
-            paths_tried = '\n'.join(tried_paths) if tried_paths else 'No paths found'
-            QMessageBox.warning(
-                self.iface.mainWindow(),
-                "Databricks Connector - Cannot Find pip",
-                f"Could not find pip in QGIS installation.\n\n"
-                f"Paths searched:\n{paths_tried}\n\n"
-                "Please install dependencies manually using the QGIS Python Console:\n\n"
-                "1. Open Python Console (Plugins → Python Console)\n"
-                "2. Run this code:\n\n"
-                "import pip\n"
-                "pip.main(['install', 'databricks-sql-connector'])\n\n"
-                "3. Restart QGIS"
-            )
-            return
-        
-        # Create progress dialog
+        """Install dependencies using pip from within the running Python process.
+
+        QGIS 4 on macOS bundles Python as an embedded interpreter whose standalone
+        binary cannot bootstrap itself (missing encodings module, wrong sys.prefix).
+        Spawning an external QProcess therefore fails.  Instead we call pip's
+        internal API directly — the same pattern used by the enmap-box plugin —
+        which runs inside the already-working QGIS Python environment.
+
+        Uses ``--user`` to install into the Python user site-packages directory,
+        which is on sys.path in both QGIS 3 and 4.
+        """
+        # Show progress
         self.progress_dialog = QProgressDialog(
-            f"Installing databricks-sql-connector...\nThis may take a few minutes.\n\nUsing: {executable}",
-            None,  # No cancel button
-            0, 0,  # Indeterminate progress
+            "Installing databricks-sql-connector...\nThis may take a minute.",
+            None, 0, 0,
             self.iface.mainWindow()
         )
         self.progress_dialog.setWindowTitle("Databricks Connector - Installing Dependencies")
         self.progress_dialog.setWindowModality(Qt.WindowModal)
         self.progress_dialog.setMinimumDuration(0)
-        self.progress_dialog.setMinimumWidth(450)
+        self.progress_dialog.setMinimumWidth(400)
         self.progress_dialog.show()
         QApplication.processEvents()
-        
-        # Reset output buffer
-        self.install_output = ""
-        
-        # Create QProcess for pip install
-        self.install_process = QProcess(self.iface.mainWindow())
-        self.install_process.setProcessChannelMode(QProcess.MergedChannels)
-        self.install_process.readyReadStandardOutput.connect(self._on_process_output)
-        self.install_process.finished.connect(self._on_process_finished)
-        self.install_process.errorOccurred.connect(self._on_process_error)
-        
-        # Start installation
+
+        pip_args = ['install', '--user', 'databricks-sql-connector']
         QgsMessageLog.logMessage(
-            f"Starting installation: {executable} {' '.join(args)}",
-            "Databricks Connector",
-            Qgis.Info
+            f"Running pip install (in-process): {pip_args}",
+            "Databricks Connector", Qgis.Info
         )
-        self.install_process.start(executable, args)
-    
-    def _on_process_output(self):
-        """Capture process output."""
-        if self.install_process:
-            output = self.install_process.readAllStandardOutput().data().decode('utf-8', errors='replace')
-            self.install_output += output
-            QgsMessageLog.logMessage(f"pip: {output.strip()}", "Databricks Connector", Qgis.Info)
-    
-    def _on_process_error(self, error):
-        """Handle process error."""
-        error_messages = {
-            QProcess.FailedToStart: "Failed to start pip process. Python executable may be invalid.",
-            QProcess.Crashed: "pip process crashed.",
-            QProcess.Timedout: "pip process timed out.",
-            QProcess.WriteError: "Error writing to pip process.",
-            QProcess.ReadError: "Error reading from pip process.",
-            QProcess.UnknownError: "Unknown error occurred."
-        }
-        error_msg = error_messages.get(error, f"Process error: {error}")
-        QgsMessageLog.logMessage(f"Installation error: {error_msg}", "Databricks Connector", Qgis.Warning)
-    
-    def _on_process_finished(self, exit_code, exit_status):
-        """Handle installation completion."""
+
+        success, msg_out, msg_err = self._run_pip(pip_args)
+
+        if msg_out:
+            QgsMessageLog.logMessage(f"pip stdout: {msg_out.strip()}", "Databricks Connector", Qgis.Info)
+        if msg_err:
+            QgsMessageLog.logMessage(f"pip stderr: {msg_err.strip()}", "Databricks Connector", Qgis.Warning)
+
         # Close progress dialog
         if self.progress_dialog:
             self.progress_dialog.close()
             self.progress_dialog = None
-        
-        success = (exit_code == 0 and exit_status == QProcess.NormalExit)
-        
+
         if success:
             QMessageBox.information(
                 self.iface.mainWindow(),
@@ -475,34 +384,21 @@ class DatabricksConnector:
             )
             QgsMessageLog.logMessage(
                 "Dependencies installed successfully. Please restart QGIS.",
-                "Databricks Connector",
-                Qgis.Success
+                "Databricks Connector", Qgis.Success
             )
         else:
-            # Get last few lines of output for error message
-            error_lines = self.install_output.strip().split('\n')[-5:]
-            error_summary = '\n'.join(error_lines) if error_lines else "No output captured"
-            
+            error_lines = msg_err.strip().split('\n')[-5:] if msg_err else ["No output captured"]
+            error_summary = '\n'.join(error_lines)
             QMessageBox.warning(
                 self.iface.mainWindow(),
                 "Databricks Connector - Installation Failed",
-                f"Installation failed (exit code: {exit_code}).\n\n"
-                f"Last output:\n{error_summary}\n\n"
-                "You can try installing manually:\n"
-                "1. Open QGIS Python Console (Plugins → Python Console)\n"
-                "2. Run: import subprocess, sys\n"
-                "3. Run: subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'databricks-sql-connector'])\n"
-                "4. Restart QGIS"
+                f"Installation failed.\n\n{error_summary}\n\n"
+                "You can try manually in the QGIS Python Console:\n\n"
+                "from pip._internal.cli.main_parser import parse_command\n"
+                "from pip._internal.commands import create_command\n"
+                "cmd_name, cmd_args = parse_command(['install', '--user', 'databricks-sql-connector'])\n"
+                "create_command(cmd_name).main(cmd_args)"
             )
-            QgsMessageLog.logMessage(
-                f"Dependency installation failed. Exit code: {exit_code}. Output: {self.install_output}",
-                "Databricks Connector",
-                Qgis.Warning
-            )
-        
-        # Clean up
-        self.install_process = None
-        self.install_output = ""
 
     def refresh_selected_layer(self):
         """Refresh all selected Databricks layers with fresh data from the database"""
@@ -789,7 +685,7 @@ class DatabricksConnector:
             self.dlg = DatabricksDialog(self.iface)
 
         # Show the dialog
-        result = self.dlg.exec_()
+        result = self.dlg.exec()
         
         if result:
             # User clicked OK - connection details should be handled in dialog

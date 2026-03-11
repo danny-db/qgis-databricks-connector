@@ -4,6 +4,7 @@ Databricks Vector Data Provider implementation
 import json
 from typing import List, Dict, Any, Optional, Tuple, Set
 from qgis.PyQt.QtCore import QVariant
+from . import _qt6_compat  # noqa: F401 — patches Qt5 enum names for Qt6
 from qgis.core import (
     QgsVectorDataProvider,
     QgsAbstractFeatureSource, 

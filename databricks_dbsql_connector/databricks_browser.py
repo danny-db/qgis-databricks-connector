@@ -6,6 +6,7 @@ from typing import List, Dict, Any, Optional
 from qgis.PyQt.QtCore import QThread, pyqtSignal, QSettings, QDate, QTime, QDateTime, QVariant
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction, QMenu, QMessageBox, QInputDialog
+from . import _qt6_compat  # noqa: F401 — patches Qt5 enum names for Qt6
 from qgis.core import (
     QgsDataItem, QgsDataItemProvider, QgsDataProvider,
     QgsDataCollectionItem, QgsLayerItem, QgsDataSourceUri,
@@ -141,7 +142,7 @@ class DatabricksConnectionItem(QgsDataCollectionItem):
                 self.connection_config,
                 QgsApplication.instance().activeWindow()
             )
-            dialog.exec_()
+            dialog.exec()
         except Exception as e:
             QMessageBox.critical(
                 QgsApplication.instance().activeWindow(),
@@ -512,7 +513,7 @@ class DatabricksTableItem(QgsDataCollectionItem):
                 return
             
             from qgis.core import QgsProject, QgsVectorLayer, QgsFields, QgsField, QgsFeature, QgsGeometry, QgsWkbTypes
-            from PyQt5.QtCore import QVariant
+            from qgis.PyQt.QtCore import QVariant
             import databricks.sql as sql
             
             # Get layer prefix from settings (same setting used by dialog)
@@ -836,7 +837,7 @@ class DatabricksTableItem(QgsDataCollectionItem):
                 QgsApplication.instance().activeWindow(),
                 initial_query=f"SELECT * FROM {full_table_name} LIMIT 100"
             )
-            dialog.exec_()
+            dialog.exec()
             
         except Exception as e:
             QMessageBox.critical(
@@ -896,7 +897,7 @@ class DatabricksQueryItem(QgsDataItem):
                 self.connection_config,
                 QgsApplication.instance().activeWindow()
             )
-            dialog.exec_()
+            dialog.exec()
         except Exception as e:
             QMessageBox.critical(
                 QgsApplication.instance().activeWindow(),
