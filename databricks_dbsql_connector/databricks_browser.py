@@ -599,7 +599,8 @@ class DatabricksTableItem(QgsDataCollectionItem):
             
             # Process rows and detect geometry types
             geometry_types = {}  # geometry_type -> [rows]
-            
+            has_z = False
+
             for row in rows:
                 try:
                     # Get WKT geometry (last column)
@@ -607,12 +608,16 @@ class DatabricksTableItem(QgsDataCollectionItem):
                     if wkt_geom and wkt_geom != 'NULL':
                         # Strip SRID prefix if present
                         clean_wkt = self._strip_srid_from_wkt(str(wkt_geom))
-                        
+
                         # Detect geometry type from WKT
                         geom = QgsGeometry.fromWkt(clean_wkt)
                         if not geom.isEmpty():
                             geom_type_name = QgsWkbTypes.displayString(geom.wkbType()).upper()
-                            
+
+                            # Detect Z dimension
+                            if not has_z and QgsWkbTypes.hasZ(geom.wkbType()):
+                                has_z = True
+
                             # Group by base geometry type (POINT, LINESTRING, POLYGON)
                             if 'POINT' in geom_type_name:
                                 base_type = 'Point'
@@ -622,22 +627,22 @@ class DatabricksTableItem(QgsDataCollectionItem):
                                 base_type = 'Polygon'
                             else:
                                 base_type = 'Unknown'
-                            
+
                             if base_type not in geometry_types:
                                 geometry_types[base_type] = []
                             geometry_types[base_type].append(row)
-                            
+
                 except Exception as e:
                     QgsMessageLog.logMessage(
                         f"Error processing geometry in row: {str(e)}",
                         "Databricks Browser",
                         Qgis.Warning
                     )
-            
+
             # Create separate layers for each geometry type
             layers_created = 0
             for geom_type, type_rows in geometry_types.items():
-                if self._create_geometry_layer(layer_name, geom_type, type_rows, fields, max_features):
+                if self._create_geometry_layer(layer_name, geom_type, type_rows, fields, max_features, has_z):
                     layers_created += 1
             
             if layers_created > 0:
@@ -668,16 +673,16 @@ class DatabricksTableItem(QgsDataCollectionItem):
         
         return wkt_str
     
-    def _create_geometry_layer(self, base_layer_name, geom_type, rows, fields, max_features=1000):
+    def _create_geometry_layer(self, base_layer_name, geom_type, rows, fields, max_features=1000, has_z=False):
         """Create a memory layer for a specific geometry type.
-        
+
         Uses direct provider access (no edit mode) to avoid strict type validation
         issues with NULL/empty datetime values.
         Uses Multi* geometry types to handle both single and multi-part geometries.
         """
         try:
             from qgis.core import QgsVectorLayer, QgsFeature, QgsGeometry, QgsWkbTypes, QgsProject
-            
+
             # Use Multi* geometry types to accept both single and multi-part geometries
             multi_geom_map = {
                 'Point': 'MultiPoint',
@@ -685,7 +690,10 @@ class DatabricksTableItem(QgsDataCollectionItem):
                 'Polygon': 'MultiPolygon'
             }
             qgis_geom_type = multi_geom_map.get(geom_type, geom_type)
-            
+            # Append Z so QGIS 3.x accepts Z-dimension geometries
+            if has_z:
+                qgis_geom_type += 'Z'
+
             layer_name = f"{base_layer_name}_{geom_type}"
             memory_layer = QgsVectorLayer(f"{qgis_geom_type}?crs=EPSG:4326", layer_name, "memory")
             

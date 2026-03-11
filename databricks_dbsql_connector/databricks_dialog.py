@@ -33,6 +33,41 @@ try:
 except ImportError:
     SHAPELY_AVAILABLE = False
 
+import decimal as _decimal
+import datetime as _datetime
+import json as _json
+
+
+def _coerce_attr(value):
+    """Convert Python values from the Databricks cursor to types accepted by the
+    QGIS memory provider on both Qt5 (QGIS 3.x) and Qt6 (QGIS 4.x).
+
+    Neither version auto-converts these Python types, so we must do it ourselves:
+    - ``decimal.Decimal`` → ``float``
+    - ``datetime.datetime`` → ``QDateTime`` (preserves type fidelity)
+    - ``datetime.date`` → ``QDate`` (preserves type fidelity)
+    - ``datetime.timedelta`` → ``str``
+    - ``bytes`` → hex string
+    - ``list`` / ``dict`` → JSON string
+    """
+    if value is None:
+        return None
+    if isinstance(value, _decimal.Decimal):
+        return float(value)
+    if isinstance(value, _datetime.datetime):
+        return QDateTime(value.year, value.month, value.day,
+                         value.hour, value.minute, value.second)
+    if isinstance(value, _datetime.date):
+        return QDate(value.year, value.month, value.day)
+    if isinstance(value, _datetime.timedelta):
+        return str(value)
+    if isinstance(value, bytes):
+        return value.hex()
+    if isinstance(value, (list, dict)):
+        return _json.dumps(value)
+    return value
+
+
 # Query dialog classes will be defined in this file to avoid import issues
 QUERY_DIALOG_AVAILABLE = True
 QUERY_DIALOG_IMPORT_ERROR = None
@@ -292,6 +327,17 @@ class LayerLoadingThread(QThread):
                 # Determine geometry type for layer creation
                 geom_type = self._get_qgs_geometry_type()
                 wkb_geom_type = self._get_wkb_geometry_type()
+
+                # Detect Z dimension from actual data so the memory layer
+                # accepts Z geometries (required on QGIS 3.x / older providers)
+                if rows:
+                    for sample_row in rows:
+                        sample_wkt = sample_row[-1] if sample_row else None
+                        if sample_wkt and str(sample_wkt).strip():
+                            sample_geom = QgsGeometry.fromWkt(str(sample_wkt))
+                            if not sample_geom.isNull() and QgsWkbTypes.hasZ(sample_geom.wkbType()):
+                                geom_type += 'Z'
+                            break
 
                 # Create memory layer with proper geometry type
                 layer_def = f"{geom_type}?crs=EPSG:4326"
@@ -1826,13 +1872,14 @@ class QueryLayerCreationThread(QThread):
             
             # Determine geometry types from all geometries and handle mixed types
             geometry_types_in_data = set()
+            has_z = False
             if geom_col_index is not None and rows:
                 for row in rows:
                     if geom_col_index < len(row) and row[geom_col_index]:
                         geom_wkt = str(row[geom_col_index])
                         # Strip SRID prefix before checking geometry type
                         clean_wkt = self._strip_srid_from_wkt(geom_wkt).strip().upper()
-                        
+
                         if clean_wkt.startswith('POINT'):
                             geometry_types_in_data.add('Point')
                         elif clean_wkt.startswith('LINESTRING'):
@@ -1845,9 +1892,16 @@ class QueryLayerCreationThread(QThread):
                             geometry_types_in_data.add('MultiLineString')
                         elif clean_wkt.startswith('MULTIPOLYGON'):
                             geometry_types_in_data.add('MultiPolygon')
+
+                        # Detect Z dimension (e.g. "MULTIPOLYGON Z (((" or "POINTZ(")
+                        if not has_z:
+                            # Extract the type keyword (everything before the first '(')
+                            type_part = clean_wkt.split('(')[0].strip()
+                            if type_part.endswith(' Z') or type_part.endswith(' ZM') or 'Z(' in clean_wkt.split('(')[0]:
+                                has_z = True
             
             QgsMessageLog.logMessage(
-                f"Detected geometry types in query results: {list(geometry_types_in_data)}",
+                f"Detected geometry types in query results: {list(geometry_types_in_data)}, has_z={has_z}",
                 "Query Dialog",
                 Qgis.Info
             )
@@ -1860,7 +1914,7 @@ class QueryLayerCreationThread(QThread):
                     Qgis.Info
                 )
                 # Create separate layers for each geometry type
-                self._create_mixed_geometry_layers(columns, rows, fields, geom_col_index, geometry_types_in_data)
+                self._create_mixed_geometry_layers(columns, rows, fields, geom_col_index, geometry_types_in_data, has_z)
                 return
             
             # Single geometry type or no geometry
@@ -1886,9 +1940,10 @@ class QueryLayerCreationThread(QThread):
                     except:
                         pass  # Keep default Point type
             
-            # Create memory layer
+            # Create memory layer — append Z suffix so QGIS 3.x accepts Z geometries
             if geom_col_index is not None:
-                layer_def = f"{geom_type}?crs=EPSG:4326"
+                layer_geom_type = f"{geom_type}Z" if has_z else geom_type
+                layer_def = f"{layer_geom_type}?crs=EPSG:4326"
                 memory_layer = QgsVectorLayer(layer_def, self.layer_name, "memory")
             else:
                 # No geometry, create attribute-only layer
@@ -1898,8 +1953,8 @@ class QueryLayerCreationThread(QThread):
                 self.finished.emit(False, f"Failed to create memory layer", None)
                 return
             
-            # Add fields
-            memory_layer.startEditing()
+            # Add fields directly to provider (no edit mode — avoids QGIS 3.x
+            # issue where commitChanges() discards provider-level additions)
             provider = memory_layer.dataProvider()
             provider.addAttributes(fields.toList())
             memory_layer.updateFields()
@@ -1919,12 +1974,9 @@ class QueryLayerCreationThread(QThread):
             for i, row in enumerate(rows):
                 feature = QgsFeature(memory_layer.fields(), i + 1)
                 
-                # Set attributes (excluding geometry column)
-                attrs = []
-                for j, value in enumerate(row):
-                    if j != geom_col_index:
-                        attrs.append(value)
-                
+                # Set attributes (excluding geometry column), coercing types
+                # so the QGIS 3.x memory provider accepts them
+                attrs = [_coerce_attr(v) for j, v in enumerate(row) if j != geom_col_index]
                 feature.setAttributes(attrs)
                 
                 # Set geometry if present
@@ -1988,15 +2040,15 @@ class QueryLayerCreationThread(QThread):
                 Qgis.Info
             )
             
-            # Add features to layer
-            provider.addFeatures(features_to_add)
-            memory_layer.commitChanges()
+            # Add features directly to provider (no edit mode)
+            success, added = provider.addFeatures(features_to_add)
+            QgsMessageLog.logMessage(
+                f"addFeatures result: success={success}, added={len(added) if added else 0}, "
+                f"layer_def={layer_def}, provider_error='{provider.lastError()}'",
+                "Query Dialog", Qgis.Info
+            )
             memory_layer.updateExtents()
-            
-            # Ensure editing is off
-            if memory_layer.isEditable():
-                memory_layer.rollBack()
-            
+
             # Check if we had geometry issues and inform the user
             total_features = len(rows)
             successful_features = memory_layer.featureCount()
@@ -2019,7 +2071,7 @@ class QueryLayerCreationThread(QThread):
         except Exception as e:
             self.finished.emit(False, f"Error creating layer: {str(e)}", None)
     
-    def _create_mixed_geometry_layers(self, columns, rows, fields, geom_col_index, geometry_types):
+    def _create_mixed_geometry_layers(self, columns, rows, fields, geom_col_index, geometry_types, has_z=False):
         """Create separate layers for each geometry type in mixed geometry data"""
         try:
             created_layers = []
@@ -2073,11 +2125,12 @@ class QueryLayerCreationThread(QThread):
                 # Create layer for this geometry type - SIMPLE VERSION
                 # Use the base layer_name with geometry type suffix
                 layer = self._create_simple_layer(
-                    f"{self.layer_name}_{geom_type}", 
-                    geom_type, 
-                    filtered_rows, 
-                    fields, 
-                    geom_col_index
+                    f"{self.layer_name}_{geom_type}",
+                    geom_type,
+                    filtered_rows,
+                    fields,
+                    geom_col_index,
+                    has_z
                 )
                 
                 if layer and layer.featureCount() > 0:
@@ -2115,240 +2168,53 @@ class QueryLayerCreationThread(QThread):
             )
             self.finished.emit(False, f"Error creating mixed geometry layers: {str(e)}", None)
     
-    def _create_simple_layer(self, layer_name, geom_type, filtered_rows, fields, geom_col_index):
-        """Create a simple layer - MINIMAL WORKING VERSION"""
+    def _create_simple_layer(self, layer_name, geom_type, filtered_rows, fields, geom_col_index, has_z=False):
+        """Create a memory layer for a specific geometry type using direct provider access."""
         try:
-            QgsMessageLog.logMessage(
-                f"Creating MINIMAL {geom_type} layer '{layer_name}' with {len(filtered_rows)} rows",
-                "Query Dialog", Qgis.Info
-            )
-            
-            # Create memory layer
-            layer_def = f"{geom_type}?crs=EPSG:4326"
+            # Append Z so QGIS 3.x accepts Z-dimension geometries
+            layer_geom_type = f"{geom_type}Z" if has_z else geom_type
+            layer_def = f"{layer_geom_type}?crs=EPSG:4326"
             memory_layer = QgsVectorLayer(layer_def, layer_name, "memory")
-            
+
             if not memory_layer.isValid():
                 QgsMessageLog.logMessage(f"Failed to create memory layer: {layer_def}", "Query Dialog", Qgis.Critical)
                 return None
-            
-            # CRITICAL: Get provider and start editing BEFORE adding fields
-            provider = memory_layer.dataProvider()
-            memory_layer.startEditing()
-            
-            # Add ONLY the non-geometry fields 
-            non_geom_fields = QgsFields()
-            for field in fields:
-                non_geom_fields.append(field)
-            
-            QgsMessageLog.logMessage(f"Adding {non_geom_fields.count()} fields to layer", "Query Dialog", Qgis.Info)
-            
-            # Add attributes to provider
-            add_result = provider.addAttributes(non_geom_fields.toList())
-            QgsMessageLog.logMessage(f"AddAttributes result: {add_result}", "Query Dialog", Qgis.Info)
-            
-            # Update fields
-            memory_layer.updateFields()
-            QgsMessageLog.logMessage(f"Layer fields after update: {memory_layer.fields().count()}", "Query Dialog", Qgis.Info)
-            
-            # Process filtered rows only
-            features_to_add = []
-            
-            for i, row in enumerate(filtered_rows):
-                # Create feature with correct field structure
-                feature = QgsFeature(memory_layer.fields())
-                
-                # Set attributes - CRITICAL: match field count exactly
-                attrs = []
-                attr_index = 0
-                for j, value in enumerate(row):
-                    if j != geom_col_index:  # Skip geometry column
-                        attrs.append(value)
-                        attr_index += 1
-                
-                QgsMessageLog.logMessage(
-                    f"Feature {i}: Setting {len(attrs)} attributes for {memory_layer.fields().count()} fields",
-                    "Query Dialog", Qgis.Info
-                )
-                
-                feature.setAttributes(attrs)
-                
-                # Set geometry
-                if geom_col_index is not None and geom_col_index < len(row) and row[geom_col_index]:
-                    geom_wkt = str(row[geom_col_index])
-                    # Strip SRID prefix before parsing
-                    clean_wkt = self._strip_srid_from_wkt(geom_wkt)
-                    geometry = QgsGeometry.fromWkt(clean_wkt)
-                    
-                    if not geometry.isNull() and geometry.isGeosValid():
-                        feature.setGeometry(geometry)
-                        QgsMessageLog.logMessage(f"Feature {i}: Geometry set successfully", "Query Dialog", Qgis.Info)
-                    else:
-                        QgsMessageLog.logMessage(f"Feature {i}: Invalid geometry after SRID stripping: {clean_wkt[:100]}...", "Query Dialog", Qgis.Warning)
-                
-                features_to_add.append(feature)
-            
-            QgsMessageLog.logMessage(f"About to add {len(features_to_add)} features to layer using WORKING METHOD", "Query Dialog", Qgis.Info)
-            
-            # COPY EXACT WORKING METHOD FROM LayerLoadingThread
-            successful_adds = 0
-            
-            # Method 1: Try using layer.addFeature() instead of dataProvider().addFeatures()
-            QgsMessageLog.logMessage("Trying Method 1: layer.addFeature()", "Query Dialog", Qgis.Info)
-            
-            for i, feature in enumerate(features_to_add):
-                try:
-                    add_result = memory_layer.addFeature(feature)
-                    if add_result:
-                        successful_adds += 1
-                        QgsMessageLog.logMessage(f"Successfully added feature {i} using layer.addFeature", "Query Dialog", Qgis.Info)
-                    else:
-                        QgsMessageLog.logMessage(f"Failed to add feature {i} using layer.addFeature, trying Method 2", "Query Dialog", Qgis.Warning)
-                        
-                        # Method 2: Try with dataProvider if layer method fails
-                        QgsMessageLog.logMessage(f"Trying Method 2 for feature {i}: dataProvider.addFeatures()", "Query Dialog", Qgis.Info)
-                        
-                        single_result = memory_layer.dataProvider().addFeatures([feature])
-                        if single_result[0]:
-                            successful_adds += 1
-                            QgsMessageLog.logMessage(f"Successfully added feature {i} using dataProvider", "Query Dialog", Qgis.Info)
-                        else:
-                            QgsMessageLog.logMessage(f"Failed to add feature {i} using both methods", "Query Dialog", Qgis.Critical)
-                
-                except Exception as e:
-                    QgsMessageLog.logMessage(f"Exception adding feature {i}: {str(e)}", "Query Dialog", Qgis.Critical)
-            
-            QgsMessageLog.logMessage(f"Successfully added {successful_adds} out of {len(features_to_add)} features", "Query Dialog", Qgis.Info)
-            
-            # Commit and check final count
-            commit_result = memory_layer.commitChanges()
-            QgsMessageLog.logMessage(f"CommitChanges result: {commit_result}", "Query Dialog", Qgis.Info)
-            
-            memory_layer.updateExtents()
-            
-            # Ensure editing is off
-            if memory_layer.isEditable():
-                memory_layer.rollBack()
-            
-            final_count = memory_layer.featureCount()
-            QgsMessageLog.logMessage(f"FINAL: Layer has {final_count} features", "Query Dialog", Qgis.Info)
-            
-            if final_count > 0:
-                return memory_layer
-            else:
-                QgsMessageLog.logMessage(f"Layer creation failed - 0 features", "Query Dialog", Qgis.Critical)
-                return None
-            
-        except Exception as e:
-            QgsMessageLog.logMessage(f"Error creating simple layer {geom_type}: {str(e)}", "Query Dialog", Qgis.Critical)
-            import traceback
-            QgsMessageLog.logMessage(f"Traceback: {traceback.format_exc()}", "Query Dialog", Qgis.Critical)
-            return None
-    
-    def _create_single_geometry_layer(self, layer_name, geom_type, columns, rows, fields, geom_col_index):
-        """Create a single layer for specific geometry type"""
-        try:
-            # Create memory layer
-            memory_layer = QgsVectorLayer(f"{geom_type}?crs=EPSG:4326", layer_name, "memory")
-            
-            if not memory_layer.isValid():
-                QgsMessageLog.logMessage(
-                    f"Failed to create memory layer for {geom_type}",
-                    "Query Dialog",
-                    Qgis.Critical
-                )
-                return None
-            
-            # Add fields
+
+            # Add fields directly to provider (no edit mode)
             provider = memory_layer.dataProvider()
             provider.addAttributes(fields.toList())
             memory_layer.updateFields()
-            
-            # Add features - ONLY add features that match this geometry type
+
+            # Build features
             features_to_add = []
-            successful_geometries = 0
-            
-            for i, row in enumerate(rows):
-                # Check if this row's geometry matches the target geometry type
+            for i, row in enumerate(filtered_rows):
+                feature = QgsFeature(memory_layer.fields())
+
+                attrs = [_coerce_attr(v) for j, v in enumerate(row) if j != geom_col_index]
+                feature.setAttributes(attrs)
+
                 if geom_col_index is not None and geom_col_index < len(row) and row[geom_col_index]:
-                    try:
-                        geom_wkt = str(row[geom_col_index]).strip().upper()
-                        
-                        # Determine this row's geometry type
-                        row_geom_type = None
-                        if geom_wkt.startswith('POINT'):
-                            row_geom_type = 'Point'
-                        elif geom_wkt.startswith('LINESTRING'):
-                            row_geom_type = 'LineString'
-                        elif geom_wkt.startswith('POLYGON'):
-                            row_geom_type = 'Polygon'
-                        elif geom_wkt.startswith('MULTIPOINT'):
-                            row_geom_type = 'MultiPoint'
-                        elif geom_wkt.startswith('MULTILINESTRING'):
-                            row_geom_type = 'MultiLineString'
-                        elif geom_wkt.startswith('MULTIPOLYGON'):
-                            row_geom_type = 'MultiPolygon'
-                        
-                        # Only process features that match the target geometry type
-                        if row_geom_type == geom_type:
-                            feature = QgsFeature(memory_layer.fields(), len(features_to_add) + 1)
-                            
-                            # Set attributes (excluding geometry column)
-                            attrs = []
-                            for j, value in enumerate(row):
-                                if j != geom_col_index:
-                                    attrs.append(value)
-                            
-                            feature.setAttributes(attrs)
-                            
-                            # Set geometry
-                            geometry = QgsGeometry.fromWkt(geom_wkt)
-                            if not geometry.isNull() and geometry.isGeosValid():
-                                feature.setGeometry(geometry)
-                                successful_geometries += 1
-                                features_to_add.append(feature)
-                                
-                                QgsMessageLog.logMessage(
-                                    f"Added {geom_type} feature {len(features_to_add)}: {geom_wkt[:50]}...",
-                                    "Query Dialog",
-                                    Qgis.Info
-                                )
-                            else:
-                                QgsMessageLog.logMessage(
-                                    f"Invalid {geom_type} geometry skipped: {geom_wkt[:100]}...",
-                                    "Query Dialog",
-                                    Qgis.Warning
-                                )
-                        
-                    except Exception as e:
-                        QgsMessageLog.logMessage(
-                            f"Error processing feature {i} for {geom_type}: {str(e)}",
-                            "Query Dialog",
-                            Qgis.Warning
-                        )
-            
-            # Add features to layer
-            provider.addFeatures(features_to_add)
-            memory_layer.commitChanges()
+                    clean_wkt = self._strip_srid_from_wkt(str(row[geom_col_index]))
+                    geometry = QgsGeometry.fromWkt(clean_wkt)
+                    if not geometry.isNull() and geometry.isGeosValid():
+                        feature.setGeometry(geometry)
+
+                features_to_add.append(feature)
+
+            # Add features directly to provider
+            if features_to_add:
+                provider.addFeatures(features_to_add)
             memory_layer.updateExtents()
-            
-            # Ensure editing is off
-            if memory_layer.isEditable():
-                memory_layer.rollBack()
-            
+
+            final_count = memory_layer.featureCount()
             QgsMessageLog.logMessage(
-                f"Created {geom_type} layer: {memory_layer.featureCount()} features, {successful_geometries} with valid geometries",
-                "Query Dialog",
-                Qgis.Info
+                f"Created {geom_type} layer '{layer_name}': {final_count} features",
+                "Query Dialog", Qgis.Info
             )
-            
-            return memory_layer
-            
+            return memory_layer if final_count > 0 else None
+
         except Exception as e:
-            QgsMessageLog.logMessage(
-                f"Error creating single geometry layer {geom_type}: {str(e)}",
-                "Query Dialog",
-                Qgis.Critical
-            )
+            QgsMessageLog.logMessage(f"Error creating layer {geom_type}: {str(e)}", "Query Dialog", Qgis.Critical)
             return None
     
     def _is_wkt_format(self, value_str):
