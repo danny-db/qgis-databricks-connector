@@ -58,12 +58,17 @@ about=A QGIS plugin that provides direct connectivity to Databricks SQL warehous
 changelog=1.3.0 - Genie Chat (natural language data queries)
     - New: Databricks Genie Chat dialog — ask questions in plain English
     - New: Genie Space browser with auto-populated space list
-    - New: Conversation history with HTML-formatted chat view
+    - New: Thinking indicator with animated dots, elapsed timer, and Cancel button
+    - New: Smart geometry hints — instructs Genie to return geometry as a typed column
+    - New: Collapsible SQL panel (hidden by default) with Show SQL / Copy SQL buttons
+    - New: Markdown rendering for Genie responses (bold, italic, bullets, code)
     - New: Query results preview table (up to 100 rows)
     - New: Auto-detect geometry columns and create QGIS layers from Genie results
     - New: Supports WKT and non-WKT geometry (auto-wraps with ST_ASWKT)
     - New: Follow-up questions within the same Genie conversation
     - New: Toolbar button and menu item for quick access
+    - New: Dark mode compatible — explicit text colours for readability
+    - New: Qt6 shims for QSizePolicy and QAbstractItemView enums
 
     1.2.0 - Live layers + QGIS 4 / Qt6 compatibility
     - New: Live Layer mode with viewport-based auto-refresh (pan/zoom to load data)
