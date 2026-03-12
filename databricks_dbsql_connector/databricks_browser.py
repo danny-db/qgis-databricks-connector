@@ -849,7 +849,7 @@ class DatabricksTableItem(QgsDataCollectionItem):
             
             from qgis.core import QgsProject, QgsVectorLayer, QgsFields, QgsField, QgsWkbTypes
             from qgis.utils import iface
-            from PyQt5.QtCore import QVariant
+            from qgis.PyQt.QtCore import QVariant
             import databricks.sql as sql
             
             # Import live layer manager
