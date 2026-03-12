@@ -86,3 +86,22 @@ try:
         QHeaderView.ResizeToContents = QHeaderView.ResizeMode.ResizeToContents
 except ImportError:
     pass
+
+# ── QSizePolicy enums ──────────────────────────────────────────────
+try:
+    from qgis.PyQt.QtWidgets import QSizePolicy
+    if not hasattr(QSizePolicy, 'Expanding'):
+        QSizePolicy.Expanding = QSizePolicy.Policy.Expanding
+        QSizePolicy.Fixed = QSizePolicy.Policy.Fixed
+        QSizePolicy.Preferred = QSizePolicy.Policy.Preferred
+        QSizePolicy.Minimum = QSizePolicy.Policy.Minimum
+except ImportError:
+    pass
+
+# ── QAbstractItemView enums ────────────────────────────────────────
+try:
+    from qgis.PyQt.QtWidgets import QAbstractItemView
+    if not hasattr(QAbstractItemView, 'NoEditTriggers'):
+        QAbstractItemView.NoEditTriggers = QAbstractItemView.EditTrigger.NoEditTriggers
+except ImportError:
+    pass

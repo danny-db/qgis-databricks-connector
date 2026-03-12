@@ -75,6 +75,9 @@ class DatabricksConnector:
         # Browser provider instance
         self.browser_provider = None
         
+        # Genie dialog (non-modal, kept alive)
+        self.genie_dlg = None
+
         # Installation process (QProcess for proper Qt integration)
         self.install_process = None
         self.progress_dialog = None
@@ -149,6 +152,15 @@ class DatabricksConnector:
             text=self.tr('Toggle Live Mode for Layer'),
             callback=self.toggle_live_mode,
             add_to_toolbar=False,  # Only in menu
+            parent=self.iface.mainWindow()
+        )
+
+        # Create action to open Genie Chat dialog
+        self.add_action(
+            icon_path,
+            text=self.tr('Databricks Genie Chat'),
+            callback=self.run_genie,
+            add_to_toolbar=True,
             parent=self.iface.mainWindow()
         )
 
@@ -814,6 +826,17 @@ class DatabricksConnector:
                 "Databricks Connector",
                 Qgis.Critical
             )
+
+    def run_genie(self):
+        """Open the Databricks Genie Chat dialog (non-modal)."""
+        from .databricks_genie import GenieDialog
+
+        if self.genie_dlg is None:
+            self.genie_dlg = GenieDialog(self.iface,
+                                         parent=self.iface.mainWindow())
+        self.genie_dlg.show()
+        self.genie_dlg.raise_()
+        self.genie_dlg.activateWindow()
 
     def run(self):
         """Run method that performs all the real work"""

@@ -3,7 +3,7 @@ name=Databricks DBSQL Connector
 qgisMinimumVersion=3.16
 qgisMaximumVersion=4.99
 description=Connect QGIS to Databricks SQL warehouses and access geospatial data directly from Unity Catalog
-version=1.2.0
+version=1.3.0
 author=Danny Wong
 email=danny.wong@databricks.com
 
@@ -16,7 +16,7 @@ tracker=https://github.com/danny-db/qgis-databricks-connector/issues
 icon=icons/databricks.svg
 
 # Tags for discoverability in plugin manager
-tags=databricks,database,sql,warehouse,geospatial,unity catalog,spatial,vector,live layer,viewport
+tags=databricks,database,sql,warehouse,geospatial,unity catalog,spatial,vector,live layer,viewport,genie,natural language,chat
 
 # Category - Database is most appropriate for this plugin
 category=Database
@@ -40,6 +40,7 @@ about=A QGIS plugin that provides direct connectivity to Databricks SQL warehous
     - Custom SQL query support with automatic geometry detection
     - Automatic handling of mixed geometry types (creates separate layers)
     - Configurable layer naming with persistent settings
+    - Genie Chat: ask questions about your data in natural language
     - Connection management with saved credentials
     - QGIS 3.x and 4.x compatible (Qt5 and Qt6)
 
@@ -54,7 +55,17 @@ about=A QGIS plugin that provides direct connectivity to Databricks SQL warehous
     For installation instructions and documentation, visit the GitHub repository.
 
 # Changelog
-changelog=1.2.0 - Live layers + QGIS 4 / Qt6 compatibility
+changelog=1.3.0 - Genie Chat (natural language data queries)
+    - New: Databricks Genie Chat dialog — ask questions in plain English
+    - New: Genie Space browser with auto-populated space list
+    - New: Conversation history with HTML-formatted chat view
+    - New: Query results preview table (up to 100 rows)
+    - New: Auto-detect geometry columns and create QGIS layers from Genie results
+    - New: Supports WKT and non-WKT geometry (auto-wraps with ST_ASWKT)
+    - New: Follow-up questions within the same Genie conversation
+    - New: Toolbar button and menu item for quick access
+
+    1.2.0 - Live layers + QGIS 4 / Qt6 compatibility
     - New: Live Layer mode with viewport-based auto-refresh (pan/zoom to load data)
     - New: Mixed geometry detection for live layers (creates separate layers per type)
     - New: Auto-centre map on first live layer load

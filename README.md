@@ -18,9 +18,24 @@ Or install from ZIP: download [`databricks_dbsql_connector.zip`](https://github.
 - [Walkthrough (Mac)](https://www.youtube.com/watch?v=M5ZvVWpZnQY)
 - [Windows installation](https://www.youtube.com/watch?v=zpyWuKZTePQ)
 
-## What's New in v1.2.0
+## What's New in v1.3.0
 
-### Live Layers (Viewport-Based Auto-Refresh)
+### Genie Chat (Natural Language Data Queries)
+- **Databricks Genie Chat**: Ask questions about your data in plain English — Genie translates them to SQL and returns results
+- **Genie Space browser**: Select from available Genie Spaces (auto-populated from your workspace)
+- **Conversation history**: Follow-up questions are sent within the same conversation for context-aware answers
+- **Thinking indicator**: Animated status with elapsed time while Genie processes your question; Cancel button to abort
+- **Smart geometry hints**: Automatically instructs Genie to return geometry as a typed column, improving layer creation success
+- **Results preview**: View query results in a table (up to 100 rows shown, full dataset held in memory)
+- **Add as Layer**: Auto-detect geometry columns and create QGIS memory layers from Genie results
+- **Mixed geometry support**: Creates separate layers per geometry type (Point, LineString, Polygon)
+- **Non-WKT geometry handling**: Automatically re-queries with `ST_ASWKT()` wrapping when needed
+- **Collapsible SQL panel**: Generated SQL hidden by default — click "Show SQL" to reveal, with "Copy SQL" alongside
+- **Markdown rendering**: Genie responses with bold, italic, bullet lists, and code render correctly in the chat
+- **Dark mode compatible**: Explicit text colours ensure readability in both light and dark QGIS themes
+- **Toolbar + menu access**: Click the Databricks icon or use `Plugins → Databricks → Databricks Genie Chat`
+
+### Previous: Live Layers (v1.2.0)
 - **Live Layer mode**: Add spatial layers that automatically refresh as you pan and zoom the map
 - **Viewport-aware queries**: Only fetches features within the current map extent via `ST_INTERSECTS`, enabling work with very large datasets
 - **Mixed geometry support**: Automatically detects geometry types (`SELECT DISTINCT ST_GEOMETRYTYPE`) and creates separate live layers per type (Point, LineString, Polygon) — same behaviour as standard layer loading
@@ -40,6 +55,7 @@ Or install from ZIP: download [`databricks_dbsql_connector.zip`](https://github.
 
 ## Features
 
+- **Genie Chat**: Ask questions in natural language — Genie returns SQL results you can visualise as layers
 - **Direct Databricks SQL Connection**: Connect directly to Databricks SQL warehouses using personal access tokens
 - **Spatial Data Support**: Full support for GEOGRAPHY and GEOMETRY data types
 - **Live Layers**: Viewport-based auto-refresh — layers update automatically as you pan and zoom
@@ -145,7 +161,19 @@ If automatic dependency installation fails:
 4. Tables with mixed geometry types automatically create separate live layers (e.g. Point + Polygon)
 5. Toggle all live layers on/off via `Plugins → Databricks → Toggle Live Mode`
 
-#### Method 4: Custom SQL Queries
+#### Method 4: Genie Chat (Natural Language)
+1. Open `Plugins → Databricks → Databricks Genie Chat` (or click the toolbar icon)
+2. Select a saved connection from the dropdown — Genie Spaces load automatically
+3. Choose a Genie Space from the dropdown
+4. Type a question in plain English (e.g. "Show me all crash locations in Adelaide")
+5. A thinking indicator with elapsed time appears while Genie processes; click **Cancel** to abort
+6. View the response in the chat — Genie's markdown (bold, bullets, etc.) renders automatically
+7. Click **Show SQL** to reveal the generated query; **Copy SQL** to copy it to clipboard
+8. For spatial results, the geometry column is auto-detected — click **Add as Layer** to visualise on the map
+9. Ask follow-up questions — they continue the same conversation for context
+10. Click **Clear Chat** to reset and start a new conversation
+
+#### Method 5: Custom SQL Queries
 1. Open Custom Query from the dialog or browser
 2. Write your SQL query
 3. Click "Execute Query"
@@ -191,6 +219,7 @@ qgis-databricks-connector/
 │   ├── databricks_browser.py      # Browser panel integration
 │   ├── databricks_provider.py     # Data provider
 │   ├── databricks_live_layer.py   # Live layer viewport auto-refresh
+│   ├── databricks_genie.py       # Genie Chat natural language interface
 │   └── icons/                     # Plugin icons
 ├── .github/workflows/             # GitHub Actions for releases
 ├── package_plugin.py              # Script to create plugin ZIP
