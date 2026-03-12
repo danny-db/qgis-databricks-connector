@@ -461,11 +461,26 @@ class DatabricksLiveLayerManager(QObject):
                     geom = self._parse_wkb_hex(geom_wkb)
                     
                     if geom is not None:
-                        # Convert to multi-type if layer expects it
+                        # Check geometry type compatibility with layer
                         layer_geom_type = self.layer.wkbType()
+                        feat_geom_type = geom.wkbType()
+
+                        # Get base geometry type names (Point, LineString, Polygon)
+                        layer_base = QgsWkbTypes.geometryDisplayString(
+                            QgsWkbTypes.geometryType(layer_geom_type)
+                        )
+                        feat_base = QgsWkbTypes.geometryDisplayString(
+                            QgsWkbTypes.geometryType(feat_geom_type)
+                        )
+
+                        if layer_base != feat_base:
+                            # Skip features with incompatible geometry type
+                            continue
+
+                        # Convert to multi-type if layer expects it
                         if QgsWkbTypes.isMultiType(layer_geom_type) and not geom.isMultipart():
                             geom.convertToMultiType()
-                        
+
                         feature.setGeometry(geom)
                         features_to_add.append(feature)
                             

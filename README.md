@@ -20,19 +20,31 @@ A QGIS plugin that provides direct connectivity to Databricks SQL warehouses, al
 - [Walkthrough (Mac)](https://www.youtube.com/watch?v=M5ZvVWpZnQY)
 - [Windows installation](https://www.youtube.com/watch?v=zpyWuKZTePQ)
 
-## What's New in v1.1.0
+## What's New in v1.2.0
 
-- **Update Layer Data from Databricks**: New menu option to refresh layers with latest data from Databricks (select layers → Plugins → Databricks → Update Layer Data from Databricks)
-- **Multi-layer refresh**: Select multiple Databricks layers and update them all at once
-- **Fixed**: Column names with spaces now work correctly (proper backtick escaping)
-- **Fixed**: Polygon/MultiPolygon layers now load correctly from Browser panel
-- **Fixed**: DateTime fields handled properly across all loading methods
-- **Improved**: Consistent behavior between Dialog and Browser panel layer loading
+### Live Layers (Viewport-Based Auto-Refresh)
+- **Live Layer mode**: Add spatial layers that automatically refresh as you pan and zoom the map
+- **Viewport-aware queries**: Only fetches features within the current map extent via `ST_INTERSECTS`, enabling work with very large datasets
+- **Mixed geometry support**: Automatically detects geometry types (`SELECT DISTINCT ST_GEOMETRYTYPE`) and creates separate live layers per type (Point, LineString, Polygon) — same behaviour as standard layer loading
+- **Auto-centre on first load**: Map centres on the data automatically so the first refresh always returns results
+- **Smart debounce**: Rapid panning consolidates into a single query (500ms debounce timer)
+- **Extent similarity check**: Small pans (<5% change) are ignored to avoid unnecessary queries
+- **Toggle live mode**: Enable/disable all live layers via Plugins menu or toolbar
+- **Multi-layer support**: Run multiple live layers simultaneously from different tables
+
+### QGIS 4 / Qt6 Compatibility
+- **QGIS 4.0 support**: Full Qt6/PyQt6 compatibility while maintaining QGIS 3.16+ support
+- **Qt6 compat shims**: Portable `_qt6_compat.py` module handles API differences automatically
+- **Fixed**: Plugin load failures caused by removed Qt5 unscoped enums
+- **Fixed**: Dependency installation on QGIS 4 macOS (switched to in-process pip)
+- **Fixed**: Replaced deprecated `exec_()` with `exec()`
+- **Fixed**: Hardcoded `PyQt5` import replaced with portable `qgis.PyQt` abstraction
 
 ## Features
 
 - **Direct Databricks SQL Connection**: Connect directly to Databricks SQL warehouses using personal access tokens
-- **Spatial Data Support**: Full support for GEOGRAPHY and GEOMETRY data types 
+- **Spatial Data Support**: Full support for GEOGRAPHY and GEOMETRY data types
+- **Live Layers**: Viewport-based auto-refresh — layers update automatically as you pan and zoom
 - **Multiple Access Methods**: Load data via Dialog, Browser Panel, or Custom Query interface
 - **Browser Panel Integration**: Browse catalogs, schemas, and tables directly in QGIS Browser
 - **Custom SQL Query Support**: Execute any SQL query and add results as layers
@@ -43,12 +55,13 @@ A QGIS plugin that provides direct connectivity to Databricks SQL warehouses, al
 - **Configurable Layer Naming**: Set custom layer name prefix
 - **Flexible Feature Limits**: Load all records or limit to specific count
 - **Layer Data Refresh**: Update existing layers with fresh data from Databricks
+- **QGIS 3.x and 4.x Compatible**: Works across QGIS 3.16+ through QGIS 4.x (Qt5 and Qt6)
 
 ## Requirements
 
 ### QGIS Version
-- Tested on QGIS 3.42.1, 3.44.1, and 3.44.5 (Mac and Windows)
-- Should work with QGIS 3.16+
+- Tested on QGIS 3.42.1, 3.44.1, 3.44.5 (Mac and Windows), and QGIS 4.0 (Qt6)
+- Supports QGIS 3.16+ through 4.x
 
 ### Python Dependencies
 - **`databricks-sql-connector`** - Required (installed automatically by the plugin)
@@ -123,9 +136,18 @@ If automatic dependency installation fails:
 3. Right-click a table:
    - **Add First 1000 Features**: Quick preview
    - **Add All Features**: Load complete dataset
+   - **Add as Live Layer (Viewport)**: Load with auto-refresh on pan/zoom
    - **View Data...**: Open custom query dialog
 
-#### Method 3: Custom SQL Queries
+#### Method 3: Live Layers
+1. Right-click a spatial table in Browser → **Add as Live Layer (Viewport)**
+   - Or: Use the Dialog with "Live Mode" checkbox enabled
+2. The map auto-centres on the data and begins loading features in the viewport
+3. Pan and zoom the map — the layer auto-refreshes with features in the current extent
+4. Tables with mixed geometry types automatically create separate live layers (e.g. Point + Polygon)
+5. Toggle all live layers on/off via `Plugins → Databricks → Toggle Live Mode`
+
+#### Method 4: Custom SQL Queries
 1. Open Custom Query from the dialog or browser
 2. Write your SQL query
 3. Click "Execute Query"
@@ -163,12 +185,14 @@ If automatic installation fails, try manual installation via Python Console (see
 qgis-databricks-connector/
 ├── databricks_dbsql_connector/    # Plugin folder
 │   ├── __init__.py                # Plugin entry point
+│   ├── _qt6_compat.py             # Qt5/Qt6 compatibility shims
 │   ├── metadata.txt               # Plugin metadata
 │   ├── LICENSE                    # MIT License
 │   ├── databricks_connector.py    # Main plugin class
 │   ├── databricks_dialog.py       # Connection dialog and query UI
 │   ├── databricks_browser.py      # Browser panel integration
 │   ├── databricks_provider.py     # Data provider
+│   ├── databricks_live_layer.py   # Live layer viewport auto-refresh
 │   └── icons/                     # Plugin icons
 ├── .github/workflows/             # GitHub Actions for releases
 ├── package_plugin.py              # Script to create plugin ZIP
