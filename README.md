@@ -4,14 +4,12 @@ A QGIS plugin that provides direct connectivity to Databricks SQL warehouses, al
 
 ## 📥 Quick Install
 
-**Download the latest release:** [databricks_dbsql_connector.zip](https://github.com/danny-db/qgis-databricks-connector/releases/latest/download/databricks_dbsql_connector.zip)
-
-1. In QGIS: `Plugins → Manage and Install Plugins → Install from ZIP`
-2. Select the downloaded `databricks_dbsql_connector.zip`
+1. In QGIS: `Plugins → Manage and Install Plugins`
+2. Search for **"Databricks DBSQL Connector"** → Click `Install Plugin`
 3. Click the **Databricks icon** → Accept automatic dependency installation
 4. **Restart QGIS**
 
-⚠️ **Important**: Download `databricks_dbsql_connector.zip` from the [Releases page](https://github.com/danny-db/qgis-databricks-connector/releases), NOT "Source code (zip)"!
+Or install from ZIP: download [`databricks_dbsql_connector.zip`](https://github.com/danny-db/qgis-databricks-connector/releases/latest/download/databricks_dbsql_connector.zip) from the [Releases page](https://github.com/danny-db/qgis-databricks-connector/releases).
 
 ---
 
@@ -75,7 +73,17 @@ A QGIS plugin that provides direct connectivity to Databricks SQL warehouses, al
 
 ## Installation
 
-### Option 1: Install from ZIP File (Recommended) ⭐
+### Option 1: Install from QGIS Plugin Manager (Recommended) ⭐
+
+1. Go to `Plugins → Manage and Install Plugins`
+2. Search for **"Databricks DBSQL Connector"**
+3. Click `Install Plugin`
+4. Click the **Databricks icon** in the toolbar - the plugin will offer to install the required `databricks-sql-connector` package automatically
+5. **Restart QGIS** after dependencies are installed
+
+Plugin page: [plugins.qgis.org/plugins/databricks_dbsql_connector](https://plugins.qgis.org/plugins/databricks_dbsql_connector/)
+
+### Option 2: Install from ZIP File
 
 1. **Download** [`databricks_dbsql_connector.zip`](https://github.com/danny-db/qgis-databricks-connector/releases/latest/download/databricks_dbsql_connector.zip) from the [Releases page](https://github.com/danny-db/qgis-databricks-connector/releases)
 
@@ -83,17 +91,7 @@ A QGIS plugin that provides direct connectivity to Databricks SQL warehouses, al
 
 3. Select the downloaded ZIP file and click `Install Plugin`
 
-4. Click the **Databricks icon** in the toolbar - the plugin will offer to install the required `databricks-sql-connector` package automatically
-
-5. **Restart QGIS** after dependencies are installed
-
-### Option 2: Install from QGIS Plugin Manager
-
-*(Coming soon - after the plugin is published to the official repository)*
-
-1. Go to `Plugins → Manage and Install Plugins`
-2. Search for "Databricks DBSQL Connector"
-3. Click `Install Plugin`
+4. **Restart QGIS** after dependencies are installed
 
 ### Installing Dependencies Manually
 
