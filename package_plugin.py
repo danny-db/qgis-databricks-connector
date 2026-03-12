@@ -31,6 +31,7 @@ INCLUDE_FILES = [
     "databricks_dialog.py",
     "databricks_browser.py",
     "databricks_provider.py",
+    "databricks_live_layer.py",
 ]
 
 INCLUDE_FOLDERS = [
