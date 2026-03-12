@@ -1,9 +1,9 @@
 [general]
 name=Databricks DBSQL Connector
 qgisMinimumVersion=3.16
-qgisMaximumVersion=3.99
+qgisMaximumVersion=4.99
 description=Connect QGIS to Databricks SQL warehouses and access geospatial data directly from Unity Catalog
-version=1.1.1
+version=1.2.0
 author=Danny Wong
 email=danny.wong@databricks.com
 
@@ -16,7 +16,7 @@ tracker=https://github.com/danny-db/qgis-databricks-connector/issues
 icon=icons/databricks.svg
 
 # Tags for discoverability in plugin manager
-tags=databricks,database,sql,warehouse,geospatial,unity catalog,spatial,vector
+tags=databricks,database,sql,warehouse,geospatial,unity catalog,spatial,vector,live layer,viewport
 
 # Category - Database is most appropriate for this plugin
 category=Database
@@ -35,26 +35,39 @@ about=A QGIS plugin that provides direct connectivity to Databricks SQL warehous
     Features:
     - Direct Databricks SQL connection using personal access tokens
     - Full support for GEOGRAPHY and GEOMETRY data types
+    - Live Layers: viewport-based auto-refresh for working with large datasets
     - Browser Panel integration for browsing catalogs, schemas, and tables
     - Custom SQL query support with automatic geometry detection
     - Automatic handling of mixed geometry types (creates separate layers)
     - Configurable layer naming with persistent settings
     - Connection management with saved credentials
-    
+    - QGIS 3.x and 4.x compatible (Qt5 and Qt6)
+
     Requirements:
     - Databricks SQL Warehouse access
     - Personal Access Token with appropriate permissions
     - Unity Catalog tables with GEOGRAPHY or GEOMETRY columns
-    
-    Python Dependencies (installed automatically by install scripts):
+
+    Python Dependencies (installed automatically):
     - databricks-sql-connector>=3.5.0 (required)
-    - shapely>=2.0.0 (optional, recommended)
-    - pyproj>=3.6.0 (optional)
-    
+
     For installation instructions and documentation, visit the GitHub repository.
 
 # Changelog
-changelog=1.1.1 - Security improvements
+changelog=1.2.0 - Live layers + QGIS 4 / Qt6 compatibility
+    - New: Live Layer mode with viewport-based auto-refresh (pan/zoom to load data)
+    - New: Mixed geometry detection for live layers (creates separate layers per type)
+    - New: Auto-centre map on first live layer load
+    - New: Smart debounce and extent similarity checks to minimise queries
+    - New: Toggle live mode on/off via Plugins menu
+    - New: QGIS 4.0 (Qt6/PyQt6) support while maintaining QGIS 3.16+ compatibility
+    - New: Qt5/Qt6 compatibility shim module (_qt6_compat.py)
+    - Fixed: Plugin load failures caused by removed Qt5 unscoped enums
+    - Fixed: Dependency installation on QGIS 4 macOS (switched to in-process pip)
+    - Fixed: Replaced deprecated exec_() with exec()
+    - Fixed: Hardcoded PyQt5 import replaced with portable qgis.PyQt abstraction
+
+    1.1.1 - Security improvements
     - Security: Use parameterized queries for information_schema lookups
     - Security: Added documentation for escaped SQL identifiers
     

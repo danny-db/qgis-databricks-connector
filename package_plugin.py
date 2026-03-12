@@ -23,6 +23,7 @@ PLUGIN_NAME = "databricks_dbsql_connector"
 # Files and folders to include in the package
 INCLUDE_FILES = [
     "__init__.py",
+    "_qt6_compat.py",
     "metadata.txt",
     "LICENSE",
     "requirements.txt",
@@ -30,6 +31,7 @@ INCLUDE_FILES = [
     "databricks_dialog.py",
     "databricks_browser.py",
     "databricks_provider.py",
+    "databricks_live_layer.py",
 ]
 
 INCLUDE_FOLDERS = [

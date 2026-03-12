@@ -141,7 +141,7 @@ class DatabricksConnectionItem(QgsDataCollectionItem):
                 self.connection_config,
                 QgsApplication.instance().activeWindow()
             )
-            dialog.exec_()
+            dialog.exec()
         except Exception as e:
             QMessageBox.critical(
                 QgsApplication.instance().activeWindow(),
@@ -481,6 +481,11 @@ class DatabricksTableItem(QgsDataCollectionItem):
             add_all_action = QAction("Add All Features", parent)
             add_all_action.triggered.connect(lambda: self._add_layer(max_features=0))
             actions.append(add_all_action)
+            
+            # Add as Live Layer action (viewport-based auto-refresh)
+            add_live_action = QAction("Add as Live Layer (Viewport)", parent)
+            add_live_action.triggered.connect(self._add_live_layer)
+            actions.append(add_live_action)
         
         # View data action (for both geometry and non-geometry tables)
         view_action = QAction("View Data...", parent)
@@ -512,7 +517,7 @@ class DatabricksTableItem(QgsDataCollectionItem):
                 return
             
             from qgis.core import QgsProject, QgsVectorLayer, QgsFields, QgsField, QgsFeature, QgsGeometry, QgsWkbTypes
-            from PyQt5.QtCore import QVariant
+            from qgis.PyQt.QtCore import QVariant
             import databricks.sql as sql
             
             # Get layer prefix from settings (same setting used by dialog)
@@ -599,7 +604,8 @@ class DatabricksTableItem(QgsDataCollectionItem):
             
             # Process rows and detect geometry types
             geometry_types = {}  # geometry_type -> [rows]
-            
+            has_z = False
+
             for row in rows:
                 try:
                     # Get WKT geometry (last column)
@@ -607,12 +613,16 @@ class DatabricksTableItem(QgsDataCollectionItem):
                     if wkt_geom and wkt_geom != 'NULL':
                         # Strip SRID prefix if present
                         clean_wkt = self._strip_srid_from_wkt(str(wkt_geom))
-                        
+
                         # Detect geometry type from WKT
                         geom = QgsGeometry.fromWkt(clean_wkt)
                         if not geom.isEmpty():
                             geom_type_name = QgsWkbTypes.displayString(geom.wkbType()).upper()
-                            
+
+                            # Detect Z dimension
+                            if not has_z and QgsWkbTypes.hasZ(geom.wkbType()):
+                                has_z = True
+
                             # Group by base geometry type (POINT, LINESTRING, POLYGON)
                             if 'POINT' in geom_type_name:
                                 base_type = 'Point'
@@ -622,22 +632,22 @@ class DatabricksTableItem(QgsDataCollectionItem):
                                 base_type = 'Polygon'
                             else:
                                 base_type = 'Unknown'
-                            
+
                             if base_type not in geometry_types:
                                 geometry_types[base_type] = []
                             geometry_types[base_type].append(row)
-                            
+
                 except Exception as e:
                     QgsMessageLog.logMessage(
                         f"Error processing geometry in row: {str(e)}",
                         "Databricks Browser",
                         Qgis.Warning
                     )
-            
+
             # Create separate layers for each geometry type
             layers_created = 0
             for geom_type, type_rows in geometry_types.items():
-                if self._create_geometry_layer(layer_name, geom_type, type_rows, fields, max_features):
+                if self._create_geometry_layer(layer_name, geom_type, type_rows, fields, max_features, has_z):
                     layers_created += 1
             
             if layers_created > 0:
@@ -668,16 +678,16 @@ class DatabricksTableItem(QgsDataCollectionItem):
         
         return wkt_str
     
-    def _create_geometry_layer(self, base_layer_name, geom_type, rows, fields, max_features=1000):
+    def _create_geometry_layer(self, base_layer_name, geom_type, rows, fields, max_features=1000, has_z=False):
         """Create a memory layer for a specific geometry type.
-        
+
         Uses direct provider access (no edit mode) to avoid strict type validation
         issues with NULL/empty datetime values.
         Uses Multi* geometry types to handle both single and multi-part geometries.
         """
         try:
             from qgis.core import QgsVectorLayer, QgsFeature, QgsGeometry, QgsWkbTypes, QgsProject
-            
+
             # Use Multi* geometry types to accept both single and multi-part geometries
             multi_geom_map = {
                 'Point': 'MultiPoint',
@@ -685,7 +695,10 @@ class DatabricksTableItem(QgsDataCollectionItem):
                 'Polygon': 'MultiPolygon'
             }
             qgis_geom_type = multi_geom_map.get(geom_type, geom_type)
-            
+            # Append Z so QGIS 3.x accepts Z-dimension geometries
+            if has_z:
+                qgis_geom_type += 'Z'
+
             layer_name = f"{base_layer_name}_{geom_type}"
             memory_layer = QgsVectorLayer(f"{qgis_geom_type}?crs=EPSG:4326", layer_name, "memory")
             
@@ -823,6 +836,231 @@ class DatabricksTableItem(QgsDataCollectionItem):
                 Qgis.Warning
             )
     
+    def _add_live_layer(self):
+        """Add this table as a live layer that auto-refreshes based on viewport.
+
+        Samples data to detect geometry types and creates one live layer per
+        geometry type (Point, LineString, Polygon), mirroring the behaviour of
+        the standard browser 'Add Features' path.
+        """
+        try:
+            if not DATABRICKS_AVAILABLE:
+                QgsMessageLog.logMessage(
+                    "databricks-sql-connector not installed",
+                    "Databricks Browser",
+                    Qgis.Critical
+                )
+                return
+
+            from qgis.core import QgsProject, QgsVectorLayer, QgsFields, QgsField, QgsWkbTypes, QgsGeometry, QgsRectangle, QgsPointXY
+            from qgis.utils import iface
+            from qgis.PyQt.QtCore import QVariant
+            import databricks.sql as sql
+
+            # Import live layer manager
+            from .databricks_live_layer import create_live_layer
+
+            # Get layer prefix from settings
+            settings = QSettings()
+            layer_prefix = settings.value("DatabricksConnector/LayerPrefix", "databricks_")
+
+            QgsMessageLog.logMessage(
+                f"Creating live layer for: {self.table_name}",
+                "Databricks Browser",
+                Qgis.Info
+            )
+
+            # Connect to Databricks to get schema + sample geometries
+            connection = sql.connect(
+                server_hostname=self.connection_config['hostname'],
+                http_path=self.connection_config['http_path'],
+                access_token=self.connection_config['access_token']
+            )
+
+            table_ref = self._get_table_reference()
+            geometry_column = self.table_info['geometry_column']
+            escaped_geom_col = f"`{geometry_column.strip('`')}`"
+
+            with connection.cursor() as cursor:
+                # Get table schema
+                cursor.execute(f"DESCRIBE {table_ref}")
+                schema_info = cursor.fetchall()
+
+                # Build QGIS fields - exclude geometry column
+                fields = QgsFields()
+                for row in schema_info:
+                    col_name = row[0]
+                    col_type = row[1].upper()
+
+                    if col_name.lower() != geometry_column.lower() and not col_type.startswith(('GEOGRAPHY', 'GEOMETRY')):
+                        if 'STRING' in col_type or 'VARCHAR' in col_type:
+                            fields.append(QgsField(col_name, QVariant.String))
+                        elif 'INT' in col_type or 'BIGINT' in col_type:
+                            fields.append(QgsField(col_name, QVariant.LongLong))
+                        elif 'DOUBLE' in col_type or 'FLOAT' in col_type or 'DECIMAL' in col_type:
+                            fields.append(QgsField(col_name, QVariant.Double))
+                        elif 'DATE' in col_type:
+                            fields.append(QgsField(col_name, QVariant.Date))
+                        elif 'TIMESTAMP' in col_type:
+                            fields.append(QgsField(col_name, QVariant.DateTime))
+                        else:
+                            fields.append(QgsField(col_name, QVariant.String))
+
+                # Query distinct geometry types in the table
+                cursor.execute(
+                    f"SELECT DISTINCT ST_GEOMETRYTYPE({escaped_geom_col}) "
+                    f"FROM {table_ref} "
+                    f"WHERE {escaped_geom_col} IS NOT NULL"
+                )
+                type_rows = cursor.fetchall()
+
+                # Fetch one sample point to centre the map on
+                cursor.execute(
+                    f"SELECT ST_X(ST_CENTROID({escaped_geom_col})), "
+                    f"ST_Y(ST_CENTROID({escaped_geom_col})) "
+                    f"FROM {table_ref} "
+                    f"WHERE {escaped_geom_col} IS NOT NULL LIMIT 1"
+                )
+                sample_point = cursor.fetchone()
+
+            connection.close()
+
+            # Map Databricks geometry type names to base types
+            detected_types = set()
+            has_z = False
+            for type_row in type_rows:
+                type_name = str(type_row[0]).upper() if type_row[0] else ''
+                if 'Z' in type_name:
+                    has_z = True
+                if 'POINT' in type_name:
+                    detected_types.add('Point')
+                elif 'LINESTRING' in type_name or 'LINE' in type_name:
+                    detected_types.add('LineString')
+                elif 'POLYGON' in type_name:
+                    detected_types.add('Polygon')
+
+            if not detected_types:
+                detected_types.add('Polygon')
+
+            QgsMessageLog.logMessage(
+                f"Live layer detected geometry types: {detected_types}",
+                "Databricks Browser",
+                Qgis.Info
+            )
+
+            multi_geom_map = {
+                'Point': 'MultiPoint',
+                'LineString': 'MultiLineString',
+                'Polygon': 'MultiPolygon'
+            }
+
+            layers_created = 0
+            for geom_type in sorted(detected_types):
+                qgis_geom_type = multi_geom_map.get(geom_type, geom_type)
+                if has_z:
+                    qgis_geom_type += 'Z'
+
+                suffix = f"_{geom_type}" if len(detected_types) > 1 else ""
+                layer_name = f"{layer_prefix}{self.table_name}{suffix}_live"
+
+                # Create empty memory layer
+                memory_layer = QgsVectorLayer(
+                    f"{qgis_geom_type}?crs=EPSG:4326",
+                    layer_name,
+                    "memory"
+                )
+
+                if not memory_layer.isValid():
+                    QgsMessageLog.logMessage(
+                        f"Failed to create memory layer for {geom_type}",
+                        "Databricks Browser",
+                        Qgis.Critical
+                    )
+                    continue
+
+                # Add fields to layer
+                provider = memory_layer.dataProvider()
+                provider.addAttributes(fields.toList())
+                memory_layer.updateFields()
+
+                # Store metadata
+                self._store_layer_metadata(memory_layer, max_features=10000)
+                memory_layer.setCustomProperty("databricks/is_live_layer", "true")
+
+                # Prepare table info for live layer manager
+                table_info = {
+                    'full_name': f"{self.catalog_name}.{self.schema_name}.{self.table_name}",
+                    'geometry_column': self.table_info.get('geometry_column', ''),
+                    'geometry_type': geom_type
+                }
+
+                # Add layer to project
+                QgsProject.instance().addMapLayer(memory_layer)
+
+                # Create live layer manager (this connects to canvas extent changes)
+                manager = create_live_layer(
+                    iface,
+                    memory_layer,
+                    self.connection_config,
+                    table_info,
+                    refresh_delay_ms=500,
+                    buffer_percent=0.1,
+                    max_features=10000
+                )
+
+                # Centre map on a sample point so the first refresh has data
+                if sample_point and sample_point[0] is not None and sample_point[1] is not None:
+                    center = QgsPointXY(float(sample_point[0]), float(sample_point[1]))
+                    canvas = iface.mapCanvas()
+                    current_extent = canvas.extent()
+                    # Keep current zoom level, just re-centre
+                    half_w = current_extent.width() / 2
+                    half_h = current_extent.height() / 2
+                    new_extent = QgsRectangle(
+                        center.x() - half_w, center.y() - half_h,
+                        center.x() + half_w, center.y() + half_h
+                    )
+                    canvas.setExtent(new_extent)
+                    canvas.refresh()
+
+                # Trigger initial refresh based on current viewport
+                manager.force_refresh()
+                layers_created += 1
+
+                QgsMessageLog.logMessage(
+                    f"Successfully created live layer: {layer_name} ({geom_type})",
+                    "Databricks Browser",
+                    Qgis.Info
+                )
+
+            if layers_created > 0:
+                type_list = ", ".join(sorted(detected_types))
+                QMessageBox.information(
+                    QgsApplication.instance().activeWindow(),
+                    "Live Layer Created",
+                    f"Created {layers_created} live layer(s) for geometry type(s): {type_list}.\n\n"
+                    "Layers will automatically refresh when you pan or zoom the map.\n\n"
+                    "Note: Data is filtered to the current viewport extent."
+                )
+            else:
+                QMessageBox.warning(
+                    QgsApplication.instance().activeWindow(),
+                    "Live Layer",
+                    "No live layers could be created. Check QGIS log for details."
+                )
+
+        except Exception as e:
+            QgsMessageLog.logMessage(
+                f"Error creating live layer: {str(e)}",
+                "Databricks Browser",
+                Qgis.Critical
+            )
+            QMessageBox.critical(
+                QgsApplication.instance().activeWindow(),
+                "Error",
+                f"Failed to create live layer: {str(e)}"
+            )
+    
     def _view_data(self):
         """View table data in a query dialog"""
         try:
@@ -836,7 +1074,7 @@ class DatabricksTableItem(QgsDataCollectionItem):
                 QgsApplication.instance().activeWindow(),
                 initial_query=f"SELECT * FROM {full_table_name} LIMIT 100"
             )
-            dialog.exec_()
+            dialog.exec()
             
         except Exception as e:
             QMessageBox.critical(
@@ -896,7 +1134,7 @@ class DatabricksQueryItem(QgsDataItem):
                 self.connection_config,
                 QgsApplication.instance().activeWindow()
             )
-            dialog.exec_()
+            dialog.exec()
         except Exception as e:
             QMessageBox.critical(
                 QgsApplication.instance().activeWindow(),
