@@ -342,10 +342,16 @@ class DatabricksConnector:
         the bundled Python binary cannot run standalone (QGIS 4 macOS).
         Captures stdout/stderr to avoid polluting the QGIS Python console.
 
+        Temporarily clears PYTHONPATH so that any subprocess pip spawns
+        (e.g. setup.py for source builds) does not inherit QGIS-specific
+        paths that would cause "Couldn't load SIP module" errors.
+
         Returns (success: bool, stdout: str, stderr: str).
         """
+        import os
         from io import StringIO
         _orig_out, _orig_err = sys.stdout, sys.stderr
+        _orig_pythonpath = os.environ.pop('PYTHONPATH', None)
         sys.stdout = StringIO()
         sys.stderr = StringIO()
         success = False
@@ -365,6 +371,8 @@ class DatabricksConnector:
         finally:
             sys.stdout = _orig_out
             sys.stderr = _orig_err
+            if _orig_pythonpath is not None:
+                os.environ['PYTHONPATH'] = _orig_pythonpath
         return success, (msg_out or ""), (msg_err or "")
 
     def _start_installation(self):
@@ -392,7 +400,7 @@ class DatabricksConnector:
         self.progress_dialog.show()
         QApplication.processEvents()
 
-        pip_args = ['install', '--user', 'databricks-sql-connector']
+        pip_args = ['install', '--user', '--no-build-isolation', 'databricks-sql-connector']
         QgsMessageLog.logMessage(
             f"Running pip install (in-process): {pip_args}",
             "Databricks Connector", Qgis.Info
@@ -432,7 +440,7 @@ class DatabricksConnector:
                 "You can try manually in the QGIS Python Console:\n\n"
                 "from pip._internal.cli.main_parser import parse_command\n"
                 "from pip._internal.commands import create_command\n"
-                "cmd_name, cmd_args = parse_command(['install', '--user', 'databricks-sql-connector'])\n"
+                "cmd_name, cmd_args = parse_command(['install', '--user', '--no-build-isolation', 'databricks-sql-connector'])\n"
                 "create_command(cmd_name).main(cmd_args)"
             )
 

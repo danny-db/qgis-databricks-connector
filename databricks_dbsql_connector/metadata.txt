@@ -3,7 +3,7 @@ name=Databricks DBSQL Connector
 qgisMinimumVersion=3.16
 qgisMaximumVersion=4.99
 description=Connect QGIS to Databricks SQL warehouses and access geospatial data directly from Unity Catalog
-version=1.3.0
+version=1.3.1
 author=Danny Wong
 email=danny.wong@databricks.com
 
@@ -55,7 +55,14 @@ about=A QGIS plugin that provides direct connectivity to Databricks SQL warehous
     For installation instructions and documentation, visit the GitHub repository.
 
 # Changelog
-changelog=1.3.0 - Genie Chat (natural language data queries)
+changelog=1.3.1 - Fix dependency installation on QGIS 4 macOS
+    - Fixed: thrift build failure caused by pip build isolation spawning broken subprocess
+    - Fixed: "Couldn't load SIP module" error during dependency installation
+    - Fixed: QGIS opening a second instance during pip install
+    - Added --no-build-isolation flag for in-process pip to prevent subprocess spawning
+    - Added PYTHONPATH scrubbing to prevent QGIS paths leaking into build subprocesses
+
+    1.3.0 - Genie Chat (natural language data queries)
     - New: Databricks Genie Chat dialog — ask questions in plain English
     - New: Genie Space browser with auto-populated space list
     - New: Thinking indicator with animated dots, elapsed timer, and Cancel button
