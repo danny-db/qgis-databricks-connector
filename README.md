@@ -18,6 +18,16 @@ Or install from ZIP: download [`databricks_dbsql_connector.zip`](https://github.
 - [Walkthrough (Mac)](https://www.youtube.com/watch?v=M5ZvVWpZnQY)
 - [Windows installation](https://www.youtube.com/watch?v=zpyWuKZTePQ)
 
+## What's New in v1.4.0
+
+### OAuth Authentication (Browser Login / SSO)
+- **Auth Method selector**: Choose **Personal Access Token** or **OAuth (browser login / SSO)** per connection
+- **No token required for OAuth**: Sign in through your browser (including SSO/identity provider) — the plugin caches and refreshes the session automatically, so the browser opens only once
+- **Sign in button**: Prime the OAuth flow up front before discovering tables or loading layers
+- **Reused everywhere**: The cached OAuth session powers Test Connection, table discovery, layer loads, live-layer refreshes, the Browser panel, and Genie
+- **Secure-by-default storage**: Tokens are written to a permission-restricted file under your QGIS profile directory
+- **Fully backwards compatible**: Existing Personal Access Token connections and saved layers keep working unchanged
+
 ## What's New in v1.3.0
 
 ### Genie Chat (Natural Language Data Queries)
@@ -56,7 +66,7 @@ Or install from ZIP: download [`databricks_dbsql_connector.zip`](https://github.
 ## Features
 
 - **Genie Chat**: Ask questions in natural language — Genie returns SQL results you can visualise as layers
-- **Direct Databricks SQL Connection**: Connect directly to Databricks SQL warehouses using personal access tokens
+- **Direct Databricks SQL Connection**: Connect directly to Databricks SQL warehouses using a personal access token or OAuth (browser login / SSO)
 - **Spatial Data Support**: Full support for GEOGRAPHY and GEOMETRY data types
 - **Live Layers**: Viewport-based auto-refresh — layers update automatically as you pan and zoom
 - **Multiple Access Methods**: Load data via Dialog, Browser Panel, or Custom Query interface
@@ -84,7 +94,7 @@ Or install from ZIP: download [`databricks_dbsql_connector.zip`](https://github.
 
 ### Databricks Requirements
 - Databricks SQL Warehouse access (Serverless recommended for best performance)
-- Personal Access Token with appropriate permissions
+- Authentication: a Personal Access Token, or OAuth (browser login / SSO) — no token needed for OAuth
 - Unity Catalog tables with GEOGRAPHY or GEOMETRY columns
 
 ## Installation
@@ -131,11 +141,28 @@ If automatic dependency installation fails:
    - **Connection Name**: A friendly name for saving this connection
    - **Server Hostname**: Your Databricks workspace hostname (e.g., `your-workspace.cloud.databricks.com`)
    - **HTTP Path**: The SQL warehouse HTTP path (e.g., `/sql/1.0/warehouses/your-warehouse-id`)
-   - **Access Token**: Your Databricks personal access token (starts with `dapi`)
+   - **Auth Method**: Choose how to authenticate (see below)
+   - **Access Token**: *(Personal Access Token only)* Your Databricks token (starts with `dapi`)
 
 3. **Test the connection** by clicking "Test Connection"
 
 4. **Save the connection** to persist settings
+
+#### Authentication methods
+
+The **Auth Method** dropdown lets you pick how the plugin authenticates:
+
+- **Personal Access Token (PAT)** — paste a token that starts with `dapi`. Simplest option;
+  the token is stored with the saved connection.
+- **OAuth (browser login / SSO)** — no token needed. The first connection (or clicking
+  **Sign in**) opens your browser to authenticate against your Databricks workspace, including
+  any SSO/identity provider. The plugin caches the resulting tokens in a
+  permission-restricted file under your QGIS profile directory and refreshes them automatically,
+  so the browser only opens once. The same cached session is reused for Test Connection,
+  table discovery, layer loads, live-layer refreshes, the Browser panel, and Genie.
+
+> **Tip:** With OAuth selected, use **Sign in** once before discovering tables so the browser
+> sign-in happens up front rather than mid-operation.
 
 ### Loading Data
 
@@ -189,9 +216,17 @@ If automatic dependency installation fails:
 ## Troubleshooting
 
 ### "Connection failed"
-- Verify hostname, HTTP path, and access token
+- Verify hostname and HTTP path (and access token if using Personal Access Token auth)
 - Check network connectivity to Databricks
 - Ensure the SQL warehouse is running
+
+### OAuth sign-in issues
+- The browser must be able to open and redirect to `http://localhost:<port>` — if no browser
+  appears, check that QGIS is not running in a headless/remote session
+- If sign-in succeeds but later connections fail, delete the cached token file
+  (`databricks_oauth_tokens.json` in your QGIS profile directory) and click **Sign in** again
+- OAuth (browser login) requires an interactive desktop session; for unattended/headless use,
+  use a Personal Access Token instead
 
 ### "No spatial tables found"
 - Verify Unity Catalog access permissions
@@ -212,6 +247,7 @@ qgis-databricks-connector/
 ├── databricks_dbsql_connector/    # Plugin folder
 │   ├── __init__.py                # Plugin entry point
 │   ├── _qt6_compat.py             # Qt5/Qt6 compatibility shims
+│   ├── databricks_auth.py         # Central auth factory + OAuth token persistence
 │   ├── metadata.txt               # Plugin metadata
 │   ├── LICENSE                    # MIT License
 │   ├── databricks_connector.py    # Main plugin class

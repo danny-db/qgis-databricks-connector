@@ -27,6 +27,16 @@ try:
 except ImportError:
     DATABRICKS_AVAILABLE = False
 
+from .databricks_auth import (
+    AUTH_PAT,
+    AUTH_OAUTH_U2M,
+    AUTH_METHOD_LABELS,
+    normalise_auth_method,
+    connect_kwargs,
+    connect_kwargs_from_config,
+    prime_oauth,
+)
+
 try:
     from shapely import wkt
     SHAPELY_AVAILABLE = True
@@ -78,24 +88,24 @@ class ConnectionTestThread(QThread):
     
     finished = pyqtSignal(bool, str)  # success, message
     
-    def __init__(self, hostname, http_path, access_token):
+    def __init__(self, hostname, http_path, access_token, auth_method=AUTH_PAT):
         super().__init__()
         self.hostname = hostname
         self.http_path = http_path
         self.access_token = access_token
-    
+        self.auth_method = auth_method
+
     def run(self):
         if not DATABRICKS_AVAILABLE:
             self.finished.emit(False, "databricks-sql-connector not installed")
             return
-            
+
         try:
             connection = sql.connect(
-                server_hostname=self.hostname,
-                http_path=self.http_path,
-                access_token=self.access_token
+                **connect_kwargs(self.hostname, self.http_path,
+                                 self.access_token, self.auth_method)
             )
-            
+
             # Test with a simple query
             with connection.cursor() as cursor:
                 cursor.execute("SELECT 1")
@@ -113,25 +123,25 @@ class TableDiscoveryThread(QThread):
     
     finished = pyqtSignal(list)  # list of table info dicts
     
-    def __init__(self, hostname, http_path, access_token):
+    def __init__(self, hostname, http_path, access_token, auth_method=AUTH_PAT):
         super().__init__()
         self.hostname = hostname
         self.http_path = http_path
         self.access_token = access_token
-    
+        self.auth_method = auth_method
+
     def run(self):
         tables = []
         if not DATABRICKS_AVAILABLE:
             self.finished.emit(tables)
             return
-            
+
         try:
             connection = sql.connect(
-                server_hostname=self.hostname,
-                http_path=self.http_path,
-                access_token=self.access_token
+                **connect_kwargs(self.hostname, self.http_path,
+                                 self.access_token, self.auth_method)
             )
-            
+
             with connection.cursor() as cursor:
                 # Query to find tables with spatial columns
                 query = """
@@ -177,11 +187,12 @@ class LayerLoadingThread(QThread):
     progress = pyqtSignal(str)  # progress message
     finished = pyqtSignal(bool, str, object)  # success, message, layer_object
     
-    def __init__(self, hostname, http_path, access_token, table_info, layer_name, max_features=1000):
+    def __init__(self, hostname, http_path, access_token, table_info, layer_name, max_features=1000, auth_method=AUTH_PAT):
         super().__init__()
         self.hostname = hostname
         self.http_path = http_path
         self.access_token = access_token
+        self.auth_method = auth_method
         self.table_info = table_info
         self.layer_name = layer_name
         self.max_features = max_features
@@ -214,13 +225,12 @@ class LayerLoadingThread(QThread):
         
         try:
             self.progress.emit("Connecting to Databricks...")
-            
+
             connection = sql.connect(
-                server_hostname=self.hostname,
-                http_path=self.http_path,
-                access_token=self.access_token
+                **connect_kwargs(self.hostname, self.http_path,
+                                 self.access_token, self.auth_method)
             )
-            
+
             # If geometry type is generic, detect actual type from sample data
             if self.table_info['geometry_type'].upper().startswith('GEOMETRY'):
                 self._detect_mixed_geometry_types(connection)
@@ -787,9 +797,24 @@ class LayerLoadingThread(QThread):
             return 1  # Point for unknown types
 
 
+class OAuthSignInThread(QThread):
+    """Thread that runs the interactive OAuth sign-in and caches the token."""
+
+    finished = pyqtSignal(bool, str)  # success, message
+
+    def __init__(self, hostname, http_path):
+        super().__init__()
+        self.hostname = hostname
+        self.http_path = http_path
+
+    def run(self):
+        success, message = prime_oauth(self.hostname, self.http_path, AUTH_OAUTH_U2M)
+        self.finished.emit(success, message)
+
+
 class DatabricksDialog(QDialog):
     """Main dialog for Databricks connector with connection persistence"""
-    
+
     def __init__(self, iface):
         super().__init__()
         self.iface = iface
@@ -834,38 +859,64 @@ class DatabricksDialog(QDialog):
         self.http_path_edit = QLineEdit()
         self.http_path_edit.setPlaceholderText("/sql/1.0/warehouses/your-warehouse-id")
         conn_layout.addWidget(self.http_path_edit, 3, 1)
-        
-        conn_layout.addWidget(QLabel("Access Token:"), 4, 0)
+
+        # Authentication method selector
+        conn_layout.addWidget(QLabel("Auth Method:"), 4, 0)
+        self.auth_method_combo = QComboBox()
+        for label, _value in AUTH_METHOD_LABELS:
+            self.auth_method_combo.addItem(label)
+        self.auth_method_combo.currentIndexChanged.connect(self._on_auth_method_changed)
+        conn_layout.addWidget(self.auth_method_combo, 4, 1)
+
+        # Access token row (only shown for Personal Access Token auth)
+        self.access_token_label = QLabel("Access Token:")
+        conn_layout.addWidget(self.access_token_label, 5, 0)
         self.access_token_edit = QLineEdit()
         self.access_token_edit.setEchoMode(QLineEdit.Password)
         self.access_token_edit.setPlaceholderText("dapi... (personal access token)")
-        conn_layout.addWidget(self.access_token_edit, 4, 1)
-        
+        conn_layout.addWidget(self.access_token_edit, 5, 1)
+
+        # OAuth hint row (only shown for OAuth auth)
+        self.oauth_hint_label = QLabel(
+            "A browser window opens for sign-in. Use \"Sign in\" or "
+            "\"Test Connection\" to authenticate."
+        )
+        self.oauth_hint_label.setWordWrap(True)
+        conn_layout.addWidget(self.oauth_hint_label, 6, 0, 1, 2)
+
         # Connection management buttons
         conn_mgmt_layout = QHBoxLayout()
         self.save_connection_btn = QPushButton("Save Connection")
         self.save_connection_btn.clicked.connect(self.save_current_connection)
         conn_mgmt_layout.addWidget(self.save_connection_btn)
-        
+
         self.delete_connection_btn = QPushButton("Delete Connection")
         self.delete_connection_btn.clicked.connect(self.delete_saved_connection)
         conn_mgmt_layout.addWidget(self.delete_connection_btn)
-        
+
         conn_mgmt_layout.addStretch()
-        conn_layout.addLayout(conn_mgmt_layout, 5, 0, 1, 2)
-        
+        conn_layout.addLayout(conn_mgmt_layout, 7, 0, 1, 2)
+
         # Connection test buttons
         conn_btn_layout = QHBoxLayout()
+        self.sign_in_btn = QPushButton("Sign in")
+        self.sign_in_btn.setToolTip("Run the OAuth browser sign-in and cache the token")
+        self.sign_in_btn.clicked.connect(self.sign_in_oauth)
+        conn_btn_layout.addWidget(self.sign_in_btn)
+
         self.test_connection_btn = QPushButton("Test Connection")
         self.test_connection_btn.clicked.connect(self.test_connection)
         conn_btn_layout.addWidget(self.test_connection_btn)
-        
+
         self.discover_tables_btn = QPushButton("Discover Tables")
         self.discover_tables_btn.clicked.connect(self.discover_tables)
         conn_btn_layout.addWidget(self.discover_tables_btn)
-        
+
         conn_btn_layout.addStretch()
-        conn_layout.addLayout(conn_btn_layout, 6, 0, 1, 2)
+        conn_layout.addLayout(conn_btn_layout, 8, 0, 1, 2)
+
+        # Apply initial visibility based on the default auth method
+        self._on_auth_method_changed()
         
         layout.addWidget(conn_group)
         
@@ -1018,8 +1069,10 @@ class DatabricksDialog(QDialog):
             self.hostname_edit.setText(self.settings.value("hostname", ""))
             self.http_path_edit.setText(self.settings.value("http_path", ""))
             self.access_token_edit.setText(self.settings.value("access_token", ""))
-            
+            self._set_auth_method(self.settings.value("auth_method", AUTH_PAT))
+
             self.settings.endGroup()
+            self._on_auth_method_changed()
             
         except Exception as e:
             QgsMessageLog.logMessage(
@@ -1034,31 +1087,96 @@ class DatabricksDialog(QDialog):
         self.hostname_edit.clear()
         self.http_path_edit.clear()
         self.access_token_edit.clear()
-    
+
+    def _auth_method(self):
+        """Return the auth-method identifier for the selected combo entry."""
+        index = self.auth_method_combo.currentIndex()
+        if 0 <= index < len(AUTH_METHOD_LABELS):
+            return AUTH_METHOD_LABELS[index][1]
+        return AUTH_PAT
+
+    def _set_auth_method(self, method):
+        """Select the combo entry matching the given auth-method identifier."""
+        method = normalise_auth_method(method)
+        for i, (_label, value) in enumerate(AUTH_METHOD_LABELS):
+            if value == method:
+                self.auth_method_combo.setCurrentIndex(i)
+                return
+        self.auth_method_combo.setCurrentIndex(0)
+
+    def _on_auth_method_changed(self, *args):
+        """Show/hide the token field and OAuth hint based on the auth method."""
+        is_pat = self._auth_method() == AUTH_PAT
+        self.access_token_label.setVisible(is_pat)
+        self.access_token_edit.setVisible(is_pat)
+        self.oauth_hint_label.setVisible(not is_pat)
+        self.sign_in_btn.setVisible(not is_pat)
+
+    def _validate_connection_inputs(self, hostname, http_path, access_token, auth_method):
+        """Return True if the supplied fields are sufficient for the method."""
+        if not hostname or not http_path:
+            return False
+        if auth_method == AUTH_PAT and not access_token:
+            return False
+        return True
+
+    def sign_in_oauth(self):
+        """Run the OAuth browser sign-in up front so the token is cached."""
+        if not DATABRICKS_AVAILABLE:
+            QMessageBox.critical(self, "Missing Dependencies",
+                                 "databricks-sql-connector is not installed. Please install it first.")
+            return
+        hostname = self.hostname_edit.text().strip()
+        http_path = self.http_path_edit.text().strip()
+        if not all([hostname, http_path]):
+            QMessageBox.warning(self, "Missing Information",
+                                "Please fill in Server Hostname and HTTP Path before signing in.")
+            return
+
+        self.progress_dialog = QProgressDialog(
+            "Waiting for browser sign-in...", "Cancel", 0, 0, self)
+        self.progress_dialog.setWindowModality(Qt.WindowModal)
+        self.progress_dialog.show()
+
+        self.sign_in_thread = OAuthSignInThread(hostname, http_path)
+        self.sign_in_thread.finished.connect(self._on_signed_in)
+        self.sign_in_thread.start()
+
+    def _on_signed_in(self, success, message):
+        """Handle OAuth sign-in results."""
+        self.progress_dialog.close()
+        if success:
+            QMessageBox.information(self, "Databricks Sign-in", message)
+            self.discover_tables_btn.setEnabled(True)
+        else:
+            QMessageBox.critical(self, "Databricks Sign-in Failed", message)
+
     def save_current_connection(self):
         """Save current connection details"""
         connection_name = self.connection_name_edit.text().strip()
         hostname = self.hostname_edit.text().strip()
         http_path = self.http_path_edit.text().strip()
         access_token = self.access_token_edit.text().strip()
+        auth_method = self._auth_method()
         layer_prefix = self.layer_prefix_edit.text().strip()
-        
+
         if not connection_name:
-            QMessageBox.warning(self, "Missing Information", 
+            QMessageBox.warning(self, "Missing Information",
                               "Please provide a connection name.")
             return
-        
-        if not all([hostname, http_path, access_token]):
-            QMessageBox.warning(self, "Missing Information", 
-                              "Please fill in all connection fields.")
+
+        if not self._validate_connection_inputs(hostname, http_path, access_token, auth_method):
+            QMessageBox.warning(self, "Missing Information",
+                              "Please fill in all required connection fields.")
             return
-        
+
         try:
             # Save connection
             self.settings.beginGroup(f"DatabricksConnector/Connections/{connection_name}")
             self.settings.setValue("hostname", hostname)
             self.settings.setValue("http_path", http_path)
             self.settings.setValue("access_token", access_token)
+            self.settings.setValue("auth_method", auth_method)
             self.settings.endGroup()
             
             # Save as last used connection
@@ -1174,19 +1292,22 @@ import sys
         hostname = self.hostname_edit.text().strip()
         http_path = self.http_path_edit.text().strip()
         access_token = self.access_token_edit.text().strip()
-        
-        if not all([hostname, http_path, access_token]):
-            QMessageBox.warning(self, "Missing Information", 
-                              "Please fill in all connection fields.")
+        auth_method = self._auth_method()
+
+        if not self._validate_connection_inputs(hostname, http_path, access_token, auth_method):
+            QMessageBox.warning(self, "Missing Information",
+                              "Please fill in all required connection fields.")
             return
-        
+
         # Show progress dialog
-        self.progress_dialog = QProgressDialog("Testing connection...", "Cancel", 0, 0, self)
+        msg = ("Waiting for browser sign-in..." if auth_method == AUTH_OAUTH_U2M
+               else "Testing connection...")
+        self.progress_dialog = QProgressDialog(msg, "Cancel", 0, 0, self)
         self.progress_dialog.setWindowModality(Qt.WindowModal)
         self.progress_dialog.show()
-        
+
         # Start test thread
-        self.test_thread = ConnectionTestThread(hostname, http_path, access_token)
+        self.test_thread = ConnectionTestThread(hostname, http_path, access_token, auth_method)
         self.test_thread.finished.connect(self.on_connection_tested)
         self.test_thread.start()
     
@@ -1210,19 +1331,20 @@ import sys
         hostname = self.hostname_edit.text().strip()
         http_path = self.http_path_edit.text().strip()
         access_token = self.access_token_edit.text().strip()
-        
-        if not all([hostname, http_path, access_token]):
-            QMessageBox.warning(self, "Missing Information", 
+        auth_method = self._auth_method()
+
+        if not self._validate_connection_inputs(hostname, http_path, access_token, auth_method):
+            QMessageBox.warning(self, "Missing Information",
                               "Please test the connection first.")
             return
-        
+
         # Show progress dialog
         self.progress_dialog = QProgressDialog("Discovering spatial tables...", "Cancel", 0, 0, self)
         self.progress_dialog.setWindowModality(Qt.WindowModal)
         self.progress_dialog.show()
-        
+
         # Start discovery thread
-        self.discovery_thread = TableDiscoveryThread(hostname, http_path, access_token)
+        self.discovery_thread = TableDiscoveryThread(hostname, http_path, access_token, auth_method)
         self.discovery_thread.finished.connect(self.on_tables_discovered)
         self.discovery_thread.start()
     
@@ -1347,7 +1469,8 @@ import sys
         
         # Start loading thread
         self.loading_thread = LayerLoadingThread(
-            hostname, http_path, access_token, table, layer_name, max_features
+            hostname, http_path, access_token, table, layer_name, max_features,
+            auth_method=self._auth_method()
         )
         self.loading_thread.progress.connect(self.on_loading_progress)
         self.loading_thread.finished.connect(self.on_layer_loaded)
@@ -1390,9 +1513,10 @@ import sys
                         connection_config = {
                             'hostname': self.hostname_edit.text().strip(),
                             'http_path': self.http_path_edit.text().strip(),
-                            'access_token': self.access_token_edit.text().strip()
+                            'access_token': self.access_token_edit.text().strip(),
+                            'auth_method': self._auth_method()
                         }
-                        
+
                         # Get table info from loading thread
                         table_info = {}
                         if hasattr(self.loading_thread, 'table_info'):
@@ -1540,7 +1664,8 @@ import sys
                     
                     # Start loading thread for this geometry type
                     loading_thread = LayerLoadingThread(
-                        hostname, http_path, access_token, specific_table_info, layer_name, max_features
+                        hostname, http_path, access_token, specific_table_info, layer_name, max_features,
+                        auth_method=self._auth_method()
                     )
                     loading_thread.progress.connect(self.on_loading_progress)
                     loading_thread.finished.connect(self.on_additional_layer_loaded)
@@ -1600,6 +1725,7 @@ import sys
             layer.setCustomProperty("databricks/hostname", hostname)
             layer.setCustomProperty("databricks/http_path", http_path)
             layer.setCustomProperty("databricks/access_token", access_token)
+            layer.setCustomProperty("databricks/auth_method", self._auth_method())
             
             # Store table info
             table_info = self.loading_thread.table_info
@@ -1634,19 +1760,21 @@ import sys
         hostname = self.hostname_edit.text().strip()
         http_path = self.http_path_edit.text().strip()
         access_token = self.access_token_edit.text().strip()
-        
-        if not all([hostname, http_path, access_token]):
-            QMessageBox.warning(self, "Missing Connection", 
+        auth_method = self._auth_method()
+
+        if not self._validate_connection_inputs(hostname, http_path, access_token, auth_method):
+            QMessageBox.warning(self, "Missing Connection",
                               "Please test the connection first or fill in all connection fields.")
             return
-        
+
         try:
             connection_config = {
                 'hostname': hostname,
                 'http_path': http_path,
-                'access_token': access_token
+                'access_token': access_token,
+                'auth_method': auth_method
             }
-            
+
             query_dialog = DatabricksQueryDialog(connection_config, self)
             query_dialog.exec()
             
@@ -1687,15 +1815,18 @@ import sys
         
         hostname = connection_config['hostname']
         http_path = connection_config['http_path']
-        access_token = connection_config['access_token']
-        
+        access_token = connection_config.get('access_token', '')
+        auth_method = normalise_auth_method(connection_config.get('auth_method', AUTH_PAT))
+
         base_uri = f"databricks://{hostname}:443{http_path}"
-        
+
         params = {
-            'access_token': access_token,
-            'table': table_info['full_name']
+            'table': table_info['full_name'],
+            'auth_method': auth_method
         }
-        
+        if access_token:
+            params['access_token'] = access_token
+
         if table_info.get('geometry_column'):
             params['geom_column'] = table_info['geometry_column']
         
@@ -1726,11 +1857,9 @@ class DatabaseStructureThread(QThread):
             self.progress.emit("Loading database structure...")
             
             connection = sql.connect(
-                server_hostname=self.connection_config['hostname'],
-                http_path=self.connection_config['http_path'],
-                access_token=self.connection_config['access_token']
+                **connect_kwargs_from_config(self.connection_config)
             )
-            
+
             with connection.cursor() as cursor:
                 # Use information_schema to get only accessible tables and columns
                 self.progress.emit("Loading accessible database structure...")
@@ -1835,11 +1964,9 @@ class QueryExecutionThread(QThread):
             self.progress.emit("Connecting to Databricks...")
             
             connection = sql.connect(
-                server_hostname=self.connection_config['hostname'],
-                http_path=self.connection_config['http_path'],
-                access_token=self.connection_config['access_token']
+                **connect_kwargs_from_config(self.connection_config)
             )
-            
+
             self.progress.emit("Executing query...")
             
             with connection.cursor() as cursor:
@@ -1883,11 +2010,9 @@ class QueryLayerCreationThread(QThread):
             self.progress.emit("Connecting to Databricks...")
             
             connection = sql.connect(
-                server_hostname=self.connection_config['hostname'],
-                http_path=self.connection_config['http_path'],
-                access_token=self.connection_config['access_token']
+                **connect_kwargs_from_config(self.connection_config)
             )
-            
+
             self.progress.emit("Analyzing query for geometry columns...")
             
             # First, check if we need to modify the query for geometry conversion

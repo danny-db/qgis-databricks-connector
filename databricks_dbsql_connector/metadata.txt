@@ -3,7 +3,7 @@ name=Databricks DBSQL Connector
 qgisMinimumVersion=3.16
 qgisMaximumVersion=4.99
 description=Connect QGIS to Databricks SQL warehouses and access geospatial data directly from Unity Catalog
-version=1.3.1
+version=1.4.0
 author=Danny Wong
 email=danny.wong@databricks.com
 
@@ -33,7 +33,7 @@ server=False
 about=A QGIS plugin that provides direct connectivity to Databricks SQL warehouses, allowing you to load and display geospatial data from Unity Catalog tables directly in QGIS.
 
     Features:
-    - Direct Databricks SQL connection using personal access tokens
+    - Direct Databricks SQL connection using personal access tokens or OAuth (browser login / SSO)
     - Full support for GEOGRAPHY and GEOMETRY data types
     - Live Layers: viewport-based auto-refresh for working with large datasets
     - Browser Panel integration for browsing catalogs, schemas, and tables
@@ -46,7 +46,7 @@ about=A QGIS plugin that provides direct connectivity to Databricks SQL warehous
 
     Requirements:
     - Databricks SQL Warehouse access
-    - Personal Access Token with appropriate permissions
+    - Authentication: a Personal Access Token, or OAuth (browser login / SSO)
     - Unity Catalog tables with GEOGRAPHY or GEOMETRY columns
 
     Python Dependencies (installed automatically):
@@ -55,7 +55,17 @@ about=A QGIS plugin that provides direct connectivity to Databricks SQL warehous
     For installation instructions and documentation, visit the GitHub repository.
 
 # Changelog
-changelog=1.3.1 - Fix dependency installation on QGIS 4 macOS
+changelog=1.4.0 - OAuth (browser login / SSO) authentication
+    - New: Auth Method selector — choose Personal Access Token or OAuth (U2M)
+    - New: OAuth User-to-Machine browser sign-in; no Personal Access Token required
+    - New: "Sign in" button primes the OAuth flow so the browser opens only once
+    - New: OAuth tokens cached in a permission-restricted file under the QGIS profile,
+      so connections, live-layer refreshes, the Browser panel and Genie reuse them silently
+    - New: Genie REST calls obtain a bearer token from the cached OAuth session
+    - Changed: all connections now flow through a single auth factory (databricks_auth.py)
+    - Back-compat: existing Personal Access Token connections and layers keep working unchanged
+
+    1.3.1 - Fix dependency installation on QGIS 4 macOS
     - Fixed: thrift build failure caused by pip build isolation spawning broken subprocess
     - Fixed: "Couldn't load SIP module" error during dependency installation
     - Fixed: QGIS opening a second instance during pip install
