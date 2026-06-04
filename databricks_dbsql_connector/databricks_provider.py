@@ -26,6 +26,7 @@ import logging
 from shapely import wkt, wkb
 from shapely.geometry import Point, LineString, Polygon
 from databricks import sql
+from .databricks_auth import AUTH_PAT, normalise_auth_method, connect_kwargs
 
 
 class DatabricksFeatureIterator(QgsAbstractFeatureIterator):
@@ -130,6 +131,7 @@ class DatabricksProvider(QgsVectorDataProvider):
         self.port = 443
         self.http_path = ''
         self.access_token = ''
+        self.auth_method = AUTH_PAT
         self.table_name = ''
         self.schema_name = ''
         self.catalog_name = ''
@@ -156,7 +158,10 @@ class DatabricksProvider(QgsVectorDataProvider):
             
             if 'access_token' in params:
                 self.access_token = params['access_token'][0]
-            
+
+            if 'auth_method' in params:
+                self.auth_method = normalise_auth_method(params['auth_method'][0])
+
             if 'table' in params:
                 table_parts = params['table'][0].split('.')
                 if len(table_parts) == 3:
@@ -178,15 +183,15 @@ class DatabricksProvider(QgsVectorDataProvider):
     
     def is_valid_config(self) -> bool:
         """Check if configuration is valid"""
-        return bool(self.hostname and self.access_token and self.table_name)
-    
+        token_ok = bool(self.access_token) or self.auth_method != AUTH_PAT
+        return bool(self.hostname and token_ok and self.table_name)
+
     def _connect(self):
         """Establish connection to Databricks"""
         try:
             self.connection = sql.connect(
-                server_hostname=self.hostname,
-                http_path=self.http_path,
-                access_token=self.access_token
+                **connect_kwargs(self.hostname, self.http_path,
+                                 self.access_token, self.auth_method)
             )
             QgsMessageLog.logMessage(
                 "Connected to Databricks successfully",
