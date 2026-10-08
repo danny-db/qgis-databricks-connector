@@ -26,6 +26,8 @@ try:
 except ImportError:
     DATABRICKS_AVAILABLE = False
 
+from .databricks_auth import connect_kwargs_from_config
+
 
 class LiveLayerFetchThread(QThread):
     """Background thread for fetching data from Databricks with viewport filtering"""
@@ -119,11 +121,9 @@ class LiveLayerFetchThread(QThread):
             self.progress.emit("Connecting to Databricks...")
             
             connection = sql.connect(
-                server_hostname=self.connection_config['hostname'],
-                http_path=self.connection_config['http_path'],
-                access_token=self.connection_config['access_token']
+                **connect_kwargs_from_config(self.connection_config)
             )
-            
+
             if self._cancelled:
                 connection.close()
                 self.finished.emit(False, "Fetch cancelled", [])

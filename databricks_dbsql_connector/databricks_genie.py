@@ -30,6 +30,13 @@ from qgis.core import (
     QgsCoordinateReferenceSystem
 )
 
+from .databricks_auth import (
+    AUTH_PAT,
+    normalise_auth_method,
+    connect_kwargs,
+    get_bearer_token,
+)
+
 
 # ---------------------------------------------------------------------------
 # Helpers (reused from databricks_dialog.py patterns)
@@ -144,17 +151,22 @@ class GenieSpaceListThread(QThread):
     spaces_loaded = pyqtSignal(list)   # [{id, title}, ...]
     error_occurred = pyqtSignal(str)
 
-    def __init__(self, hostname, access_token, parent=None):
+    def __init__(self, hostname, access_token, parent=None,
+                 http_path=None, auth_method=AUTH_PAT):
         super().__init__(parent)
         self.hostname = hostname
         self.access_token = access_token
+        self.http_path = http_path
+        self.auth_method = auth_method
 
     def run(self):
         try:
+            token = get_bearer_token(self.hostname, self.http_path,
+                                     self.access_token, self.auth_method)
             data = _api_request(
                 self.hostname,
                 '/api/2.0/genie/spaces',
-                self.access_token,
+                token,
             )
             spaces = []
             for sp in data.get('spaces', []):
@@ -182,10 +194,13 @@ class GenieApiThread(QThread):
     _MAX_POLL_SECS = 600  # 10 min
 
     def __init__(self, hostname, access_token, space_id, question,
-                 conversation_id=None, parent=None):
+                 conversation_id=None, parent=None,
+                 http_path=None, auth_method=AUTH_PAT):
         super().__init__(parent)
         self.hostname = hostname
         self.access_token = access_token
+        self.http_path = http_path
+        self.auth_method = auth_method
         self.space_id = space_id
         self.question = question
         self.conversation_id = conversation_id
@@ -244,6 +259,11 @@ class GenieApiThread(QThread):
 
     def run(self):
         try:
+            # Resolve the bearer token (refreshes OAuth tokens if needed).
+            self.access_token = get_bearer_token(
+                self.hostname, self.http_path,
+                self.access_token, self.auth_method)
+
             # 1. Start or continue conversation
             if self.conversation_id:
                 path = (f'/api/2.0/genie/spaces/{self.space_id}'
@@ -322,11 +342,13 @@ class GenieReQueryThread(QThread):
     status_update = pyqtSignal(str)
 
     def __init__(self, hostname, http_path, access_token,
-                 query_statement, geom_col, parent=None):
+                 query_statement, geom_col, parent=None,
+                 auth_method=AUTH_PAT):
         super().__init__(parent)
         self.hostname = hostname
         self.http_path = http_path
         self.access_token = access_token
+        self.auth_method = auth_method
         self.query_statement = query_statement
         self.geom_col = geom_col
 
@@ -349,9 +371,8 @@ class GenieReQueryThread(QThread):
             )
 
             conn = dbsql.connect(
-                server_hostname=self.hostname,
-                http_path=self.http_path,
-                access_token=self.access_token,
+                **connect_kwargs(self.hostname, self.http_path,
+                                 self.access_token, self.auth_method)
             )
             with conn.cursor() as cursor:
                 cursor.execute(wrapped_query)
@@ -517,31 +538,40 @@ class GenieDialog(QDialog):
             self._on_connection_changed(0)
 
     def _get_connection(self):
-        """Return (hostname, http_path, access_token) for the selected connection."""
+        """Return (hostname, http_path, access_token, auth_method) for the
+        selected connection."""
         name = self.conn_combo.currentText()
         if not name:
-            return None, None, None
+            return None, None, None, AUTH_PAT
         base = f"DatabricksConnector/Connections/{name}"
         hostname = self.settings.value(f"{base}/hostname", "")
         http_path = self.settings.value(f"{base}/http_path", "")
         token = self.settings.value(f"{base}/access_token", "")
-        return hostname, http_path, token
+        auth_method = normalise_auth_method(
+            self.settings.value(f"{base}/auth_method", AUTH_PAT))
+        return hostname, http_path, token, auth_method
+
+    @staticmethod
+    def _creds_ready(hostname, token, auth_method):
+        """True if there is enough to authenticate (token, or OAuth)."""
+        return bool(hostname) and (bool(token) or auth_method != AUTH_PAT)
 
     def _on_connection_changed(self, _index):
         """When connection changes, refresh the Genie Space list."""
-        hostname, _hp, token = self._get_connection()
-        if not hostname or not token:
+        hostname, http_path, token, auth_method = self._get_connection()
+        if not self._creds_ready(hostname, token, auth_method):
             self.space_combo.clear()
             return
-        self._fetch_spaces(hostname, token)
+        self._fetch_spaces(hostname, token, http_path, auth_method)
 
-    def _fetch_spaces(self, hostname, token):
+    def _fetch_spaces(self, hostname, token, http_path=None, auth_method=AUTH_PAT):
         """Kick off a background thread to list Genie Spaces."""
         self.space_combo.clear()
         self.space_combo.addItem("Loading...")
         self.space_combo.setEnabled(False)
 
-        self._space_thread = GenieSpaceListThread(hostname, token, self)
+        self._space_thread = GenieSpaceListThread(
+            hostname, token, self, http_path=http_path, auth_method=auth_method)
         self._space_thread.spaces_loaded.connect(self._on_spaces_loaded)
         self._space_thread.error_occurred.connect(self._on_spaces_error)
         self._space_thread.start()
@@ -643,8 +673,8 @@ class GenieDialog(QDialog):
         if not question:
             return
 
-        hostname, http_path, token = self._get_connection()
-        if not hostname or not token:
+        hostname, http_path, token, auth_method = self._get_connection()
+        if not self._creds_ready(hostname, token, auth_method):
             QMessageBox.warning(self, "No Connection",
                                 "Please select a saved connection first.")
             return
@@ -681,6 +711,7 @@ class GenieDialog(QDialog):
             hostname, token, space_id, api_question,
             conversation_id=self._conversation_id,
             parent=self,
+            http_path=http_path, auth_method=auth_method,
         )
         self._api_thread.response_received.connect(self._on_response)
         self._api_thread.error_occurred.connect(self._on_api_error)
@@ -940,8 +971,9 @@ class GenieDialog(QDialog):
                 geom_idx, f"genie_{geom_col}")
         else:
             # Path B: need to re-query via DB to get WKT — use thread for I/O
-            hostname, http_path, token = self._get_connection()
-            if not all([hostname, http_path, token]):
+            hostname, http_path, token, auth_method = self._get_connection()
+            if not (hostname and http_path
+                    and self._creds_ready(hostname, token, auth_method)):
                 QMessageBox.warning(
                     self, "Missing Connection",
                     "HTTP Path is required for non-WKT geometry re-query. "
@@ -959,7 +991,8 @@ class GenieDialog(QDialog):
             self._pending_layer_geom_col = geom_col
             self._requery_thread = GenieReQueryThread(
                 hostname, http_path, token,
-                self._current_query, geom_col, parent=self)
+                self._current_query, geom_col, parent=self,
+                auth_method=auth_method)
             self._requery_thread.data_ready.connect(self._on_requery_done)
             self._requery_thread.error_occurred.connect(self._on_layer_error)
             self._requery_thread.status_update.connect(

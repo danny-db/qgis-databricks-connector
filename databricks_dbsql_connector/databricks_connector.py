@@ -31,6 +31,7 @@ BROWSER_AVAILABLE = True  # Assume it's available, import when needed
 BROWSER_IMPORT_ERROR = None
 
 from .databricks_dialog import DatabricksDialog
+from .databricks_auth import AUTH_PAT, normalise_auth_method, connect_kwargs
 
 
 class DatabricksConnector:
@@ -512,29 +513,34 @@ class DatabricksConnector:
             hostname = layer.customProperty("databricks/hostname", "")
             http_path = layer.customProperty("databricks/http_path", "")
             access_token = layer.customProperty("databricks/access_token", "")
+            auth_method = normalise_auth_method(
+                layer.customProperty("databricks/auth_method", AUTH_PAT))
             full_name = layer.customProperty("databricks/full_name", "")
             geometry_column = layer.customProperty("databricks/geometry_column", "")
             max_features_str = layer.customProperty("databricks/max_features", "0")
-            
-            if not all([hostname, http_path, access_token, full_name]):
+
+            token_ok = bool(access_token) or auth_method != AUTH_PAT
+            if not all([hostname, http_path, full_name]) or not token_ok:
                 QgsMessageLog.logMessage(
                     f"Skipping layer '{layer.name()}' - missing connection info",
                     "Databricks Connector",
                     Qgis.Warning
                 )
                 continue
-            
+
             try:
                 max_features = int(max_features_str)
             except ValueError:
                 max_features = 0
-            
+
             # Perform refresh
-            self._do_refresh_layer(layer, hostname, http_path, access_token, 
-                                   full_name, geometry_column, max_features)
-    
-    def _do_refresh_layer(self, layer, hostname, http_path, access_token, 
-                          full_name, geometry_column, max_features):
+            self._do_refresh_layer(layer, hostname, http_path, access_token,
+                                   full_name, geometry_column, max_features,
+                                   auth_method=auth_method)
+
+    def _do_refresh_layer(self, layer, hostname, http_path, access_token,
+                          full_name, geometry_column, max_features,
+                          auth_method=AUTH_PAT):
         """Actually perform the layer refresh operation"""
         try:
             if not DATABRICKS_AVAILABLE:
@@ -562,9 +568,7 @@ class DatabricksConnector:
             
             # Connect to Databricks
             connection = sql.connect(
-                server_hostname=hostname,
-                http_path=http_path,
-                access_token=access_token
+                **connect_kwargs(hostname, http_path, access_token, auth_method)
             )
             
             # Escape identifiers helper
@@ -775,10 +779,15 @@ class DatabricksConnector:
                 connection_config = {
                     'hostname': layer.customProperty("databricks/hostname", ""),
                     'http_path': layer.customProperty("databricks/http_path", ""),
-                    'access_token': layer.customProperty("databricks/access_token", "")
+                    'access_token': layer.customProperty("databricks/access_token", ""),
+                    'auth_method': normalise_auth_method(
+                        layer.customProperty("databricks/auth_method", AUTH_PAT))
                 }
-                
-                if not all(connection_config.values()):
+
+                _token_ok = (bool(connection_config['access_token'])
+                             or connection_config['auth_method'] != AUTH_PAT)
+                if not (connection_config['hostname'] and connection_config['http_path']
+                        and _token_ok):
                     QMessageBox.warning(
                         self.iface.mainWindow(),
                         "Missing Connection Info",

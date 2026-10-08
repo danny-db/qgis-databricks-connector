@@ -24,6 +24,7 @@ PLUGIN_NAME = "databricks_dbsql_connector"
 INCLUDE_FILES = [
     "__init__.py",
     "_qt6_compat.py",
+    "databricks_auth.py",
     "metadata.txt",
     "LICENSE",
     "requirements.txt",

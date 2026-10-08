@@ -21,6 +21,11 @@ except ImportError:
     DATABRICKS_AVAILABLE = False
 
 from .databricks_dialog import DatabricksQueryDialog
+from .databricks_auth import (
+    AUTH_PAT,
+    normalise_auth_method,
+    connect_kwargs_from_config,
+)
 
 
 class DatabricksConnectionItem(QgsDataCollectionItem):
@@ -78,9 +83,7 @@ class DatabricksConnectionItem(QgsDataCollectionItem):
         """Get list of accessible catalogs using information_schema (same as custom query dialog)"""
         try:
             connection = sql.connect(
-                server_hostname=self.connection_config['hostname'],
-                http_path=self.connection_config['http_path'],
-                access_token=self.connection_config['access_token']
+                **connect_kwargs_from_config(self.connection_config)
             )
             
             with connection.cursor() as cursor:
@@ -188,9 +191,7 @@ class DatabricksCatalogItem(QgsDataCollectionItem):
         """Get list of schemas in this catalog using information_schema"""
         try:
             connection = sql.connect(
-                server_hostname=self.connection_config['hostname'],
-                http_path=self.connection_config['http_path'],
-                access_token=self.connection_config['access_token']
+                **connect_kwargs_from_config(self.connection_config)
             )
             
             with connection.cursor() as cursor:
@@ -278,9 +279,7 @@ class DatabricksSchemaItem(QgsDataCollectionItem):
         """Get list of tables in this schema with geometry information using system.information_schema"""
         try:
             connection = sql.connect(
-                server_hostname=self.connection_config['hostname'],
-                http_path=self.connection_config['http_path'],
-                access_token=self.connection_config['access_token']
+                **connect_kwargs_from_config(self.connection_config)
             )
             
             tables = {}  # Use dict to store table information
@@ -421,9 +420,7 @@ class DatabricksTableItem(QgsDataCollectionItem):
         try:
             # Get table schema from Databricks
             connection = sql.connect(
-                server_hostname=self.connection_config['hostname'],
-                http_path=self.connection_config['http_path'],
-                access_token=self.connection_config['access_token']
+                **connect_kwargs_from_config(self.connection_config)
             )
             
             with connection.cursor() as cursor:
@@ -536,9 +533,7 @@ class DatabricksTableItem(QgsDataCollectionItem):
             
             # Connect to Databricks
             connection = sql.connect(
-                server_hostname=self.connection_config['hostname'],
-                http_path=self.connection_config['http_path'],
-                access_token=self.connection_config['access_token']
+                **connect_kwargs_from_config(self.connection_config)
             )
             
             with connection.cursor() as cursor:
@@ -815,7 +810,9 @@ class DatabricksTableItem(QgsDataCollectionItem):
             layer.setCustomProperty("databricks/hostname", self.connection_config.get('hostname', ''))
             layer.setCustomProperty("databricks/http_path", self.connection_config.get('http_path', ''))
             layer.setCustomProperty("databricks/access_token", self.connection_config.get('access_token', ''))
-            
+            layer.setCustomProperty("databricks/auth_method",
+                                    normalise_auth_method(self.connection_config.get('auth_method', AUTH_PAT)))
+
             # Store table info
             full_name = f"{self.catalog_name}.{self.schema_name}.{self.table_name}"
             layer.setCustomProperty("databricks/full_name", full_name)
@@ -872,9 +869,7 @@ class DatabricksTableItem(QgsDataCollectionItem):
 
             # Connect to Databricks to get schema + sample geometries
             connection = sql.connect(
-                server_hostname=self.connection_config['hostname'],
-                http_path=self.connection_config['http_path'],
-                access_token=self.connection_config['access_token']
+                **connect_kwargs_from_config(self.connection_config)
             )
 
             table_ref = self._get_table_reference()
@@ -1177,11 +1172,16 @@ class DatabricksRootItem(QgsDataCollectionItem):
                 connection_config = {
                     'hostname': settings.value("hostname", ""),
                     'http_path': settings.value("http_path", ""),
-                    'access_token': settings.value("access_token", "")
+                    'access_token': settings.value("access_token", ""),
+                    'auth_method': normalise_auth_method(
+                        settings.value("auth_method", AUTH_PAT))
                 }
                 settings.endGroup()
-                
-                if all(connection_config.values()):  # Only add if all required fields are present
+
+                # Require host + path, and a token only for PAT auth.
+                token_ok = (bool(connection_config['access_token'])
+                            or connection_config['auth_method'] != AUTH_PAT)
+                if connection_config['hostname'] and connection_config['http_path'] and token_ok:
                     conn_item = DatabricksConnectionItem(self, conn_name, connection_config)
                     children.append(conn_item)
             
