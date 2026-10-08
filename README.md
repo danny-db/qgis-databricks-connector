@@ -18,6 +18,11 @@ Or install from ZIP: download [`databricks_dbsql_connector.zip`](https://github.
 - [Walkthrough (Mac)](https://www.youtube.com/watch?v=M5ZvVWpZnQY)
 - [Windows installation](https://www.youtube.com/watch?v=zpyWuKZTePQ)
 
+## What's New in v1.5.1
+
+- **Security fixes** from the QGIS plugin site scan: SQL identifiers containing backticks are now escaped correctly, live-layer viewport values are sent as query parameters, Databricks API calls are https-only, and previously ignored errors are logged
+- **Qt6 compatibility**: fully scoped Qt/QGIS enums throughout, so the same plugin runs on QGIS 3 (Qt5) and QGIS 4 (Qt6) without monkeypatching
+
 ## What's New in v1.5.0
 
 ### Genie One (Ask Across Your Whole Workspace)

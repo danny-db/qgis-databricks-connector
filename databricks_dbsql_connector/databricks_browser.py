@@ -44,7 +44,7 @@ class DatabricksConnectionItem(QgsDataCollectionItem):
     
     def capabilities(self):
         """Return item capabilities"""
-        return QgsDataItem.Fertile
+        return QgsDataItem.Capability.Fertile
         
     def createChildren(self):
         """Create catalog children"""
@@ -73,7 +73,7 @@ class DatabricksConnectionItem(QgsDataCollectionItem):
             QgsMessageLog.logMessage(
                 f"Error creating Databricks children: {str(e)}",
                 "Databricks Browser",
-                Qgis.Critical
+                Qgis.MessageLevel.Critical
             )
             error_item = QgsErrorItem(self, f"Error: {str(e)}", 
                                     "/Databricks/" + self.name() + "/error")
@@ -97,7 +97,7 @@ class DatabricksConnectionItem(QgsDataCollectionItem):
                 QgsMessageLog.logMessage(
                     f"Browser: Querying accessible catalogs with: {info_query}",
                     "Databricks Browser",
-                    Qgis.Info
+                    Qgis.MessageLevel.Info
                 )
                 
                 cursor.execute(info_query)
@@ -107,7 +107,7 @@ class DatabricksConnectionItem(QgsDataCollectionItem):
                 QgsMessageLog.logMessage(
                     f"Browser: Found {len(catalogs)} accessible catalogs: {catalogs}",
                     "Databricks Browser",
-                    Qgis.Info
+                    Qgis.MessageLevel.Info
                 )
             
             connection.close()
@@ -117,7 +117,7 @@ class DatabricksConnectionItem(QgsDataCollectionItem):
             QgsMessageLog.logMessage(
                 f"Error getting catalogs from information_schema: {str(e)}",
                 "Databricks Browser",
-                Qgis.Warning
+                Qgis.MessageLevel.Warning
             )
             return []
     
@@ -164,7 +164,7 @@ class DatabricksCatalogItem(QgsDataCollectionItem):
     
     def capabilities(self):
         """Return item capabilities"""
-        return QgsDataItem.Fertile
+        return QgsDataItem.Capability.Fertile
     
     def createChildren(self):
         """Create schema children"""
@@ -182,7 +182,7 @@ class DatabricksCatalogItem(QgsDataCollectionItem):
             QgsMessageLog.logMessage(
                 f"Error creating catalog children: {str(e)}",
                 "Databricks Browser",
-                Qgis.Critical
+                Qgis.MessageLevel.Critical
             )
             error_item = QgsErrorItem(self, f"Error: {str(e)}", self.path() + "/error")
             return [error_item]
@@ -208,7 +208,7 @@ class DatabricksCatalogItem(QgsDataCollectionItem):
                 QgsMessageLog.logMessage(
                     f"Browser: Querying schemas for catalog '{self.catalog_name}'",
                     "Databricks Browser",
-                    Qgis.Info
+                    Qgis.MessageLevel.Info
                 )
                 
                 cursor.execute(info_query, {"catalog": self.catalog_name})
@@ -218,7 +218,7 @@ class DatabricksCatalogItem(QgsDataCollectionItem):
                 QgsMessageLog.logMessage(
                     f"Browser: Found {len(schemas)} schemas in catalog '{self.catalog_name}': {schemas}",
                     "Databricks Browser",
-                    Qgis.Info
+                    Qgis.MessageLevel.Info
                 )
             
             connection.close()
@@ -228,7 +228,7 @@ class DatabricksCatalogItem(QgsDataCollectionItem):
             QgsMessageLog.logMessage(
                 f"Error getting schemas from information_schema: {str(e)}",
                 "Databricks Browser",
-                Qgis.Warning
+                Qgis.MessageLevel.Warning
             )
             return []
 
@@ -245,7 +245,7 @@ class DatabricksSchemaItem(QgsDataCollectionItem):
     
     def capabilities(self):
         """Return item capabilities"""
-        return QgsDataItem.Fertile
+        return QgsDataItem.Capability.Fertile
     
     def createChildren(self):
         """Create table children"""
@@ -270,7 +270,7 @@ class DatabricksSchemaItem(QgsDataCollectionItem):
             QgsMessageLog.logMessage(
                 f"Error creating schema children: {str(e)}",
                 "Databricks Browser",
-                Qgis.Critical
+                Qgis.MessageLevel.Critical
             )
             error_item = QgsErrorItem(self, f"Error: {str(e)}", self.path() + "/error")
             return [error_item]
@@ -299,7 +299,7 @@ class DatabricksSchemaItem(QgsDataCollectionItem):
                 QgsMessageLog.logMessage(
                     f"Browser: Querying tables for {self.catalog_name}.{self.schema_name}",
                     "Databricks Browser",
-                    Qgis.Info
+                    Qgis.MessageLevel.Info
                 )
                 
                 cursor.execute(tables_query, {"catalog": self.catalog_name, "schema": self.schema_name})
@@ -318,7 +318,7 @@ class DatabricksSchemaItem(QgsDataCollectionItem):
                 QgsMessageLog.logMessage(
                     f"Browser: Found {len(tables)} tables in {self.catalog_name}.{self.schema_name}",
                     "Databricks Browser",
-                    Qgis.Info
+                    Qgis.MessageLevel.Info
                 )
                 
                 # Now check for geometry columns using system.information_schema.columns
@@ -337,7 +337,7 @@ class DatabricksSchemaItem(QgsDataCollectionItem):
                     QgsMessageLog.logMessage(
                         f"Browser: Querying geometry columns for {self.catalog_name}.{self.schema_name}",
                         "Databricks Browser",
-                        Qgis.Info
+                        Qgis.MessageLevel.Info
                     )
                     
                     cursor.execute(columns_query, {"catalog": self.catalog_name, "schema": self.schema_name})
@@ -358,7 +358,7 @@ class DatabricksSchemaItem(QgsDataCollectionItem):
                     QgsMessageLog.logMessage(
                         f"Browser: {geom_tables} out of {len(tables)} tables have geometry columns",
                         "Databricks Browser",
-                        Qgis.Info
+                        Qgis.MessageLevel.Info
                     )
             
             connection.close()
@@ -368,7 +368,7 @@ class DatabricksSchemaItem(QgsDataCollectionItem):
             QgsMessageLog.logMessage(
                 f"Error getting tables from system.information_schema: {str(e)}",
                 "Databricks Browser",
-                Qgis.Warning
+                Qgis.MessageLevel.Warning
             )
             return []
 
@@ -400,7 +400,8 @@ class DatabricksTableItem(QgsDataCollectionItem):
         # Always use backticks for safety, especially if identifier contains hyphens or special chars
         # Remove existing backticks first to avoid double-escaping
         identifier = identifier.strip('`')
-        return f"`{identifier}`"
+        # Double any backtick inside the name so it cannot close the quote
+        return "`" + identifier.replace("`", "``") + "`"
     
     def _get_table_reference(self):
         """Get properly escaped table reference in format catalog.schema.table"""
@@ -411,7 +412,7 @@ class DatabricksTableItem(QgsDataCollectionItem):
     
     def capabilities(self):
         """Return item capabilities"""
-        return QgsDataItem.Fertile  # Allow expansion to show schema
+        return QgsDataItem.Capability.Fertile  # Allow expansion to show schema
     
     def createChildren(self):
         """Create children items showing table schema (columns)"""
@@ -453,7 +454,7 @@ class DatabricksTableItem(QgsDataCollectionItem):
             QgsMessageLog.logMessage(
                 f"Error getting table schema: {str(e)}",
                 "Databricks Browser",
-                Qgis.Warning
+                Qgis.MessageLevel.Warning
             )
             # Add error item
             error_item = QgsErrorItem(self, f"Error loading schema: {str(e)}", self.path() + "/error")
@@ -509,7 +510,7 @@ class DatabricksTableItem(QgsDataCollectionItem):
                 QgsMessageLog.logMessage(
                     "databricks-sql-connector not installed",
                     "Databricks Browser",
-                    Qgis.Critical
+                    Qgis.MessageLevel.Critical
                 )
                 return
             
@@ -528,7 +529,7 @@ class DatabricksTableItem(QgsDataCollectionItem):
             QgsMessageLog.logMessage(
                 f"Loading table: {layer_name} ({limit_msg})",
                 "Databricks Browser",
-                Qgis.Info
+                Qgis.MessageLevel.Info
             )
             
             # Connect to Databricks
@@ -580,7 +581,7 @@ class DatabricksTableItem(QgsDataCollectionItem):
                 data_query = f"""
                     SELECT {attr_sql}, {geometry_sql} as geometry_wkt
                     FROM {table_ref}
-                """
+                """  # nosec B608 - identifiers only, backtick-quoted via _escape_identifier (UC names cannot be bound as parameters)
                 
                 # Add LIMIT clause only if max_features > 0
                 if max_features > 0:
@@ -589,7 +590,7 @@ class DatabricksTableItem(QgsDataCollectionItem):
                 QgsMessageLog.logMessage(
                     f"Executing query: {data_query}",
                     "Databricks Browser",
-                    Qgis.Info
+                    Qgis.MessageLevel.Info
                 )
                 
                 cursor.execute(data_query)
@@ -636,7 +637,7 @@ class DatabricksTableItem(QgsDataCollectionItem):
                     QgsMessageLog.logMessage(
                         f"Error processing geometry in row: {str(e)}",
                         "Databricks Browser",
-                        Qgis.Warning
+                        Qgis.MessageLevel.Warning
                     )
 
             # Create separate layers for each geometry type
@@ -649,14 +650,14 @@ class DatabricksTableItem(QgsDataCollectionItem):
                 QgsMessageLog.logMessage(
                     f"Successfully created {layers_created} layers for table: {layer_name}",
                     "Databricks Browser",
-                    Qgis.Info
+                    Qgis.MessageLevel.Info
                 )
             
         except Exception as e:
             QgsMessageLog.logMessage(
                 f"Error adding layer: {str(e)}",
                 "Databricks Browser",
-                Qgis.Critical
+                Qgis.MessageLevel.Critical
             )
     
     def _strip_srid_from_wkt(self, wkt_str):
@@ -764,7 +765,7 @@ class DatabricksTableItem(QgsDataCollectionItem):
                     QgsMessageLog.logMessage(
                         f"Error processing feature: {str(e)}",
                         "Databricks Browser",
-                        Qgis.Warning
+                        Qgis.MessageLevel.Warning
                     )
             
             # Add features directly to provider (bypasses edit buffer type validation)
@@ -773,7 +774,7 @@ class DatabricksTableItem(QgsDataCollectionItem):
                 QgsMessageLog.logMessage(
                     f"addFeatures returned: success={success}, added count={len(added_features) if added_features else 0}",
                     "Databricks Browser",
-                    Qgis.Info
+                    Qgis.MessageLevel.Info
                 )
             
             memory_layer.updateExtents()
@@ -784,7 +785,7 @@ class DatabricksTableItem(QgsDataCollectionItem):
             QgsMessageLog.logMessage(
                 f"Layer created: {layer_name}, final feature count: {final_count}",
                 "Databricks Browser",
-                Qgis.Info
+                Qgis.MessageLevel.Info
             )
             
             if final_count > 0:
@@ -799,7 +800,7 @@ class DatabricksTableItem(QgsDataCollectionItem):
             QgsMessageLog.logMessage(
                 f"Error creating geometry layer: {str(e)}",
                 "Databricks Browser",
-                Qgis.Critical
+                Qgis.MessageLevel.Critical
             )
             return False
     
@@ -824,13 +825,13 @@ class DatabricksTableItem(QgsDataCollectionItem):
             QgsMessageLog.logMessage(
                 f"Stored Databricks metadata on layer: {layer.name()}",
                 "Databricks Browser",
-                Qgis.Info
+                Qgis.MessageLevel.Info
             )
         except Exception as e:
             QgsMessageLog.logMessage(
                 f"Error storing layer metadata: {str(e)}",
                 "Databricks Browser",
-                Qgis.Warning
+                Qgis.MessageLevel.Warning
             )
     
     def _add_live_layer(self):
@@ -845,7 +846,7 @@ class DatabricksTableItem(QgsDataCollectionItem):
                 QgsMessageLog.logMessage(
                     "databricks-sql-connector not installed",
                     "Databricks Browser",
-                    Qgis.Critical
+                    Qgis.MessageLevel.Critical
                 )
                 return
 
@@ -864,7 +865,7 @@ class DatabricksTableItem(QgsDataCollectionItem):
             QgsMessageLog.logMessage(
                 f"Creating live layer for: {self.table_name}",
                 "Databricks Browser",
-                Qgis.Info
+                Qgis.MessageLevel.Info
             )
 
             # Connect to Databricks to get schema + sample geometries
@@ -874,7 +875,7 @@ class DatabricksTableItem(QgsDataCollectionItem):
 
             table_ref = self._get_table_reference()
             geometry_column = self.table_info['geometry_column']
-            escaped_geom_col = f"`{geometry_column.strip('`')}`"
+            escaped_geom_col = self._escape_identifier(geometry_column)
 
             with connection.cursor() as cursor:
                 # Get table schema
@@ -903,7 +904,7 @@ class DatabricksTableItem(QgsDataCollectionItem):
 
                 # Query distinct geometry types in the table
                 cursor.execute(
-                    f"SELECT DISTINCT ST_GEOMETRYTYPE({escaped_geom_col}) "
+                    f"SELECT DISTINCT ST_GEOMETRYTYPE({escaped_geom_col}) "  # nosec B608 - identifiers only, backtick-quoted via _escape_identifier (UC names cannot be bound as parameters)
                     f"FROM {table_ref} "
                     f"WHERE {escaped_geom_col} IS NOT NULL"
                 )
@@ -911,7 +912,7 @@ class DatabricksTableItem(QgsDataCollectionItem):
 
                 # Fetch one sample point to centre the map on
                 cursor.execute(
-                    f"SELECT ST_X(ST_CENTROID({escaped_geom_col})), "
+                    f"SELECT ST_X(ST_CENTROID({escaped_geom_col})), "  # nosec B608 - identifiers only, backtick-quoted via _escape_identifier (UC names cannot be bound as parameters)
                     f"ST_Y(ST_CENTROID({escaped_geom_col})) "
                     f"FROM {table_ref} "
                     f"WHERE {escaped_geom_col} IS NOT NULL LIMIT 1"
@@ -940,7 +941,7 @@ class DatabricksTableItem(QgsDataCollectionItem):
             QgsMessageLog.logMessage(
                 f"Live layer detected geometry types: {detected_types}",
                 "Databricks Browser",
-                Qgis.Info
+                Qgis.MessageLevel.Info
             )
 
             multi_geom_map = {
@@ -969,7 +970,7 @@ class DatabricksTableItem(QgsDataCollectionItem):
                     QgsMessageLog.logMessage(
                         f"Failed to create memory layer for {geom_type}",
                         "Databricks Browser",
-                        Qgis.Critical
+                        Qgis.MessageLevel.Critical
                     )
                     continue
 
@@ -1025,7 +1026,7 @@ class DatabricksTableItem(QgsDataCollectionItem):
                 QgsMessageLog.logMessage(
                     f"Successfully created live layer: {layer_name} ({geom_type})",
                     "Databricks Browser",
-                    Qgis.Info
+                    Qgis.MessageLevel.Info
                 )
 
             if layers_created > 0:
@@ -1048,7 +1049,7 @@ class DatabricksTableItem(QgsDataCollectionItem):
             QgsMessageLog.logMessage(
                 f"Error creating live layer: {str(e)}",
                 "Databricks Browser",
-                Qgis.Critical
+                Qgis.MessageLevel.Critical
             )
             QMessageBox.critical(
                 QgsApplication.instance().activeWindow(),
@@ -1067,7 +1068,7 @@ class DatabricksTableItem(QgsDataCollectionItem):
             dialog = DatabricksQueryDialog(
                 self.connection_config,
                 QgsApplication.instance().activeWindow(),
-                initial_query=f"SELECT * FROM {full_table_name} LIMIT 100"
+                initial_query=f"SELECT * FROM {full_table_name} LIMIT 100"  # nosec B608 - pre-fills the Custom Query editor text; nothing is executed here
             )
             dialog.exec()
             
@@ -1083,7 +1084,7 @@ class DatabricksColumnItem(QgsDataItem):
     """Item representing a table column"""
     
     def __init__(self, parent, display_name, column_name, column_type, is_geometry):
-        super().__init__(QgsDataItem.Field, parent, display_name, parent.path() + "/" + column_name)
+        super().__init__(QgsDataItem.Type.Field, parent, display_name, parent.path() + "/" + column_name)
         self.column_name = column_name
         self.column_type = column_type
         self.is_geometry = is_geometry
@@ -1107,7 +1108,7 @@ class DatabricksQueryItem(QgsDataItem):
     """Item for executing custom queries"""
     
     def __init__(self, parent, name, connection_config):
-        super().__init__(QgsDataItem.Collection, parent, name, parent.path() + "/" + name)
+        super().__init__(QgsDataItem.Type.Collection, parent, name, parent.path() + "/" + name)
         self.connection_config = connection_config
         self.setIcon(QgsApplication.getThemeIcon('/mActionRunSql.svg'))
     
@@ -1191,7 +1192,7 @@ class DatabricksRootItem(QgsDataCollectionItem):
             QgsMessageLog.logMessage(
                 f"Error loading Databricks connections: {str(e)}",
                 "Databricks Browser",
-                Qgis.Warning
+                Qgis.MessageLevel.Warning
             )
         
         if not children:
@@ -1221,7 +1222,7 @@ class DatabricksDataItemProvider(QgsDataItemProvider):
         return "Databricks"
     
     def capabilities(self):
-        return QgsDataProvider.Database
+        return QgsDataProvider.DataCapability.Database
     
     def createDataItem(self, path, parentItem):
         # Create root item when QGIS asks for top-level items (empty path, no parent)

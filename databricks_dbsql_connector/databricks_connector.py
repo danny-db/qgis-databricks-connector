@@ -182,7 +182,7 @@ class DatabricksConnector:
             QgsMessageLog.logMessage(
                 f"Databricks connector dependencies not available: {IMPORT_ERROR}",
                 "Databricks Connector",
-                Qgis.Warning
+                Qgis.MessageLevel.Warning
             )
         
         # Register the browser provider
@@ -192,7 +192,7 @@ class DatabricksConnector:
             QgsMessageLog.logMessage(
                 f"Databricks browser provider not available: {BROWSER_IMPORT_ERROR}",
                 "Databricks Connector",
-                Qgis.Warning
+                Qgis.MessageLevel.Warning
             )
         
         # Will be set False in run()
@@ -208,13 +208,13 @@ class DatabricksConnector:
             QgsMessageLog.logMessage(
                 "Live layer managers cleaned up successfully",
                 "Databricks Connector",
-                Qgis.Info
+                Qgis.MessageLevel.Info
             )
         except Exception as e:
             QgsMessageLog.logMessage(
                 f"Error cleaning up live layer managers: {str(e)}",
                 "Databricks Connector",
-                Qgis.Warning
+                Qgis.MessageLevel.Warning
             )
         
         # Safely unregister the data provider - compatible with different QGIS versions
@@ -232,13 +232,13 @@ class DatabricksConnector:
                     QgsMessageLog.logMessage(
                         "Cannot unregister provider - method not available in this QGIS version",
                         "Databricks Connector",
-                        Qgis.Warning
+                        Qgis.MessageLevel.Warning
                     )
             except Exception as e:
                 QgsMessageLog.logMessage(
                     f"Error unregistering provider: {str(e)}",
                     "Databricks Connector",
-                    Qgis.Warning
+                    Qgis.MessageLevel.Warning
                 )
         
         # Unregister the browser provider
@@ -256,13 +256,13 @@ class DatabricksConnector:
                 QgsMessageLog.logMessage(
                     "Databricks browser provider unregistered successfully",
                     "Databricks Connector",
-                    Qgis.Info
+                    Qgis.MessageLevel.Info
                 )
             except Exception as e:
                 QgsMessageLog.logMessage(
                     f"Error unregistering browser provider: {str(e)}",
                     "Databricks Connector",
-                    Qgis.Warning
+                    Qgis.MessageLevel.Warning
                 )
             
         for action in self.actions:
@@ -284,14 +284,14 @@ class DatabricksConnector:
             QgsMessageLog.logMessage(
                 "Databricks provider registered successfully",
                 "Databricks Connector",
-                Qgis.Info
+                Qgis.MessageLevel.Info
             )
             
         except Exception as e:
             QgsMessageLog.logMessage(
                 f"Failed to register Databricks provider: {str(e)}",
                 "Databricks Connector",
-                Qgis.Critical
+                Qgis.MessageLevel.Critical
             )
     
     def register_browser_provider(self):
@@ -316,14 +316,14 @@ class DatabricksConnector:
             QgsMessageLog.logMessage(
                 "Databricks browser provider registered successfully",
                 "Databricks Connector",
-                Qgis.Info
+                Qgis.MessageLevel.Info
             )
             
         except Exception as e:
             QgsMessageLog.logMessage(
                 f"Failed to register Databricks browser provider: {str(e)}",
                 "Databricks Connector",
-                Qgis.Critical
+                Qgis.MessageLevel.Critical
             )
             global BROWSER_AVAILABLE, BROWSER_IMPORT_ERROR
             BROWSER_AVAILABLE = False
@@ -338,11 +338,11 @@ class DatabricksConnector:
             "Would you like to install it now?\n\n"
             "This will install: databricks-sql-connector\n\n"
             "Note: QGIS will need to be restarted after installation.",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.Yes
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes
         )
 
-        if reply == QMessageBox.Yes:
+        if reply == QMessageBox.StandardButton.Yes:
             self._start_installation()
 
     @staticmethod
@@ -405,7 +405,7 @@ class DatabricksConnector:
             self.iface.mainWindow()
         )
         self.progress_dialog.setWindowTitle("Databricks Connector - Installing Dependencies")
-        self.progress_dialog.setWindowModality(Qt.WindowModal)
+        self.progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
         self.progress_dialog.setMinimumDuration(0)
         self.progress_dialog.setMinimumWidth(400)
         self.progress_dialog.show()
@@ -414,15 +414,15 @@ class DatabricksConnector:
         pip_args = ['install', '--user', '--no-build-isolation', 'databricks-sql-connector']
         QgsMessageLog.logMessage(
             f"Running pip install (in-process): {pip_args}",
-            "Databricks Connector", Qgis.Info
+            "Databricks Connector", Qgis.MessageLevel.Info
         )
 
         success, msg_out, msg_err = self._run_pip(pip_args)
 
         if msg_out:
-            QgsMessageLog.logMessage(f"pip stdout: {msg_out.strip()}", "Databricks Connector", Qgis.Info)
+            QgsMessageLog.logMessage(f"pip stdout: {msg_out.strip()}", "Databricks Connector", Qgis.MessageLevel.Info)
         if msg_err:
-            QgsMessageLog.logMessage(f"pip stderr: {msg_err.strip()}", "Databricks Connector", Qgis.Warning)
+            QgsMessageLog.logMessage(f"pip stderr: {msg_err.strip()}", "Databricks Connector", Qgis.MessageLevel.Warning)
 
         # Close progress dialog
         if self.progress_dialog:
@@ -439,7 +439,7 @@ class DatabricksConnector:
             )
             QgsMessageLog.logMessage(
                 "Dependencies installed successfully. Please restart QGIS.",
-                "Databricks Connector", Qgis.Success
+                "Databricks Connector", Qgis.MessageLevel.Success
             )
         else:
             error_lines = msg_err.strip().split('\n')[-5:] if msg_err else ["No output captured"]
@@ -478,7 +478,7 @@ class DatabricksConnector:
                 QgsMessageLog.logMessage(
                     f"Layer '{layer.name()}': is_databricks={is_databricks}",
                     "Databricks Connector",
-                    Qgis.Info
+                    Qgis.MessageLevel.Info
                 )
                 if is_databricks:
                     databricks_layers.append(layer)
@@ -486,7 +486,7 @@ class DatabricksConnector:
                     QgsMessageLog.logMessage(
                         f"Layer '{layer.name()}' skipped - not a Databricks layer",
                         "Databricks Connector",
-                        Qgis.Warning
+                        Qgis.MessageLevel.Warning
                     )
         
         if not databricks_layers:
@@ -511,11 +511,11 @@ class DatabricksConnector:
             self.iface.mainWindow(),
             "Refresh Layers",
             confirm_msg,
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.Yes
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes
         )
         
-        if reply != QMessageBox.Yes:
+        if reply != QMessageBox.StandardButton.Yes:
             return
         
         # Refresh each layer
@@ -534,7 +534,7 @@ class DatabricksConnector:
                 QgsMessageLog.logMessage(
                     f"Skipping layer '{layer.name()}' - missing connection info",
                     "Databricks Connector",
-                    Qgis.Warning
+                    Qgis.MessageLevel.Warning
                 )
                 continue
 
@@ -571,7 +571,7 @@ class DatabricksConnector:
                 self.iface.mainWindow()
             )
             progress.setWindowTitle("Databricks Connector - Refresh Layer")
-            progress.setWindowModality(Qt.WindowModal)
+            progress.setWindowModality(Qt.WindowModality.WindowModal)
             progress.setMinimumDuration(0)
             progress.show()
             QApplication.processEvents()
@@ -585,7 +585,8 @@ class DatabricksConnector:
             def escape_id(identifier):
                 if not identifier:
                     return identifier
-                return f"`{identifier.strip('`')}`"
+                # Double inner backticks so a name can't close the quote
+                return "`" + identifier.strip('`').replace('`', '``') + "`"
             
             # Build escaped table reference
             parts = full_name.split('.')
@@ -599,14 +600,14 @@ class DatabricksConnector:
             select_clause = field_names.copy()
             select_clause.append(f"ST_ASWKT({escaped_geom_col}) as geom_wkt")
             
-            query = f"SELECT {', '.join(select_clause)} FROM {escaped_table_ref}"
+            query = f"SELECT {', '.join(select_clause)} FROM {escaped_table_ref}"  # nosec B608 - identifiers only, backtick-quoted via _escape_identifier (UC names cannot be bound as parameters)
             if max_features > 0:
                 query += f" LIMIT {max_features}"
             
             QgsMessageLog.logMessage(
                 f"Refreshing layer with query: {query}",
                 "Databricks Connector",
-                Qgis.Info
+                Qgis.MessageLevel.Info
             )
             
             # Execute query
@@ -686,7 +687,7 @@ class DatabricksConnector:
                         QgsMessageLog.logMessage(
                             f"Error adding feature {i}: {str(e)}",
                             "Databricks Connector",
-                            Qgis.Warning
+                            Qgis.MessageLevel.Warning
                         )
                 
                 # Commit changes
@@ -709,7 +710,7 @@ class DatabricksConnector:
             QgsMessageLog.logMessage(
                 f"Refreshed layer '{layer.name()}' with {features_added} features",
                 "Databricks Connector",
-                Qgis.Info
+                Qgis.MessageLevel.Info
             )
             
         except Exception as e:
@@ -721,7 +722,7 @@ class DatabricksConnector:
             QgsMessageLog.logMessage(
                 f"Error refreshing layer: {str(e)}",
                 "Databricks Connector",
-                Qgis.Critical
+                Qgis.MessageLevel.Critical
             )
             
             # Roll back any partial changes
@@ -781,7 +782,7 @@ class DatabricksConnector:
                 QgsMessageLog.logMessage(
                     f"Live mode disabled for layer: {layer.name()}",
                     "Databricks Connector",
-                    Qgis.Info
+                    Qgis.MessageLevel.Info
                 )
             else:
                 # Enable live mode
@@ -839,7 +840,7 @@ class DatabricksConnector:
                 QgsMessageLog.logMessage(
                     f"Live mode enabled for layer: {layer.name()}",
                     "Databricks Connector",
-                    Qgis.Info
+                    Qgis.MessageLevel.Info
                 )
                 
         except Exception as e:
@@ -851,7 +852,7 @@ class DatabricksConnector:
             QgsMessageLog.logMessage(
                 f"Error toggling live mode: {str(e)}",
                 "Databricks Connector",
-                Qgis.Critical
+                Qgis.MessageLevel.Critical
             )
 
     def run_genie(self):

@@ -3,7 +3,7 @@ name=Databricks DBSQL Connector
 qgisMinimumVersion=3.16
 qgisMaximumVersion=4.99
 description=Connect QGIS to Databricks SQL warehouses and access geospatial data directly from Unity Catalog
-version=1.5.0
+version=1.5.1
 author=Danny Wong
 email=danny.wong@databricks.com
 
@@ -56,7 +56,14 @@ about=A QGIS plugin that provides direct connectivity to Databricks SQL warehous
     For installation instructions and documentation, visit the GitHub repository.
 
 # Changelog
-changelog=1.5.0 - Genie One + Genie Agent rename
+changelog=1.5.1 - Security and Qt6 compatibility fixes (QGIS plugin site scans)
+    - Security: identifiers with backticks are now escaped correctly in all SQL
+    - Security: live layer viewport bound as query parameters; https-only API requests
+    - Security: errors that were silently ignored are now logged
+    - Qt6: fully scoped enums throughout (works on QGIS 3 and QGIS 4); compat shim reduced
+    - Tested on QGIS 3.44 (Qt5) and QGIS 4.2.3 (Qt6)
+
+    1.5.0 - Genie One + Genie Agent rename
     - New: Databricks Genie One dialog — ask questions across the whole workspace
       (no Genie Agent to pick) via the Genie One MCP server on Unity Gateway
     - New: live progress steps, Cancel, multiple query results, Open in Databricks link

@@ -21,6 +21,7 @@ which need an ``Authorization: Bearer`` header rather than a SQL connection.
 
 import base64
 import json
+import logging
 import os
 import stat
 import threading
@@ -53,6 +54,8 @@ _TOKEN_EXPIRY_MARGIN_SECONDS = 120
 
 _persistence_lock = threading.Lock()
 
+logger = logging.getLogger(__name__)
+
 
 def normalise_auth_method(value):
     """Coerce a stored/blank auth-method value to a known identifier.
@@ -76,8 +79,10 @@ def _ensure_oauth_scopes():
         from databricks.sql.auth import auth as _dbsql_auth
 
         _dbsql_auth.PYSQL_OAUTH_SCOPES = list(_OAUTH_SCOPES)
-    except Exception:
-        pass
+    except Exception as exc:
+        # SQL still works with the connector's default scopes; only Genie
+        # needs the wider ones, and it reports a clear error if missing.
+        logger.warning("Could not set OAuth scopes on the connector: %s", exc)
 
 
 def _cache_key(hostname):
@@ -303,7 +308,7 @@ def get_bearer_token(hostname, http_path, access_token=None, auth_method=AUTH_PA
             connection.close()
             cached = persistence.read(_cache_key(hostname)) if persistence is not None else None
             token = cached.access_token if cached is not None else token
-        except Exception:
+        except Exception as exc:
             # Fall back to whatever we had cached; the caller surfaces errors.
-            pass
+            logger.warning("OAuth token refresh failed, using cached token: %s", exc)
     return token

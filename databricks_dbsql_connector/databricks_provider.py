@@ -50,7 +50,7 @@ class DatabricksFeatureIterator(QgsAbstractFeatureIterator):
             QgsMessageLog.logMessage(
                 f"Error fetching features: {str(e)}",
                 "Databricks Provider",
-                Qgis.Critical
+                Qgis.MessageLevel.Critical
             )
             self.features = []
     
@@ -115,7 +115,7 @@ class DatabricksProvider(QgsVectorDataProvider):
         self.feature_count_cache = -1
         self.extent_cache = QgsRectangle()
         self.geometry_column = None
-        self.geometry_type = QgsWkbTypes.Unknown
+        self.geometry_type = QgsWkbTypes.Type.Unknown
         
         # Initialize connection
         if self.is_valid_config():
@@ -130,7 +130,7 @@ class DatabricksProvider(QgsVectorDataProvider):
         self.hostname = ''
         self.port = 443
         self.http_path = ''
-        self.access_token = ''
+        self.access_token = ''  # nosec B105 - empty default; the real token comes from the layer URI
         self.auth_method = AUTH_PAT
         self.table_name = ''
         self.schema_name = ''
@@ -178,7 +178,7 @@ class DatabricksProvider(QgsVectorDataProvider):
             QgsMessageLog.logMessage(
                 f"Error parsing URI: {str(e)} - URI: {uri}",
                 "Databricks Provider",
-                Qgis.Warning
+                Qgis.MessageLevel.Warning
             )
     
     def is_valid_config(self) -> bool:
@@ -196,13 +196,13 @@ class DatabricksProvider(QgsVectorDataProvider):
             QgsMessageLog.logMessage(
                 "Connected to Databricks successfully",
                 "Databricks Provider", 
-                Qgis.Info
+                Qgis.MessageLevel.Info
             )
         except Exception as e:
             QgsMessageLog.logMessage(
                 f"Failed to connect to Databricks: {str(e)}",
                 "Databricks Provider",
-                Qgis.Critical
+                Qgis.MessageLevel.Critical
             )
             self.connection = None
     
@@ -215,7 +215,8 @@ class DatabricksProvider(QgsVectorDataProvider):
             return identifier
         # Remove existing backticks to avoid double-escaping
         identifier = identifier.strip('`')
-        return f"`{identifier}`"
+        # Double any backtick inside the name so it cannot close the quote
+        return "`" + identifier.replace("`", "``") + "`"
     
     def _get_escaped_table_ref(self):
         """Get properly escaped table reference from table parts."""
@@ -260,7 +261,7 @@ class DatabricksProvider(QgsVectorDataProvider):
                 # Get feature count
                 # Note: table_ref is escaped via _get_escaped_table_ref() using backticks
                 # Table identifiers cannot be parameterized in SQL
-                cursor.execute(f"SELECT COUNT(*) FROM {table_ref}")
+                cursor.execute(f"SELECT COUNT(*) FROM {table_ref}")  # nosec B608 - identifiers only, backtick-quoted via _escape_identifier (UC names cannot be bound as parameters)
                 result = cursor.fetchone()
                 self.feature_count_cache = result[0] if result else 0
                 
@@ -272,7 +273,7 @@ class DatabricksProvider(QgsVectorDataProvider):
             QgsMessageLog.logMessage(
                 f"Error initializing layer: {str(e)}",
                 "Databricks Provider",
-                Qgis.Critical
+                Qgis.MessageLevel.Critical
             )
     
     def _detect_geometry_type(self, table_ref: str, geom_col: str):
@@ -285,33 +286,33 @@ class DatabricksProvider(QgsVectorDataProvider):
                     FROM {table_ref} 
                     WHERE {escaped_geom_col} IS NOT NULL 
                     LIMIT 1
-                """)
+                """)  # nosec B608 - identifiers only, backtick-quoted via _escape_identifier (UC names cannot be bound as parameters)
                 result = cursor.fetchone()
                 
                 if result and result[0]:
                     geom_type = result[0].upper()
                     if 'POINT' in geom_type:
-                        self.geometry_type = QgsWkbTypes.Point
+                        self.geometry_type = QgsWkbTypes.Type.Point
                     elif 'LINESTRING' in geom_type:
-                        self.geometry_type = QgsWkbTypes.LineString
+                        self.geometry_type = QgsWkbTypes.Type.LineString
                     elif 'POLYGON' in geom_type:
-                        self.geometry_type = QgsWkbTypes.Polygon
+                        self.geometry_type = QgsWkbTypes.Type.Polygon
                     elif 'MULTIPOINT' in geom_type:
-                        self.geometry_type = QgsWkbTypes.MultiPoint
+                        self.geometry_type = QgsWkbTypes.Type.MultiPoint
                     elif 'MULTILINESTRING' in geom_type:
-                        self.geometry_type = QgsWkbTypes.MultiLineString
+                        self.geometry_type = QgsWkbTypes.Type.MultiLineString
                     elif 'MULTIPOLYGON' in geom_type:
-                        self.geometry_type = QgsWkbTypes.MultiPolygon
+                        self.geometry_type = QgsWkbTypes.Type.MultiPolygon
                     else:
-                        self.geometry_type = QgsWkbTypes.Unknown
+                        self.geometry_type = QgsWkbTypes.Type.Unknown
                         
         except Exception as e:
             QgsMessageLog.logMessage(
                 f"Error detecting geometry type: {str(e)}",
                 "Databricks Provider",
-                Qgis.Warning
+                Qgis.MessageLevel.Warning
             )
-            self.geometry_type = QgsWkbTypes.Unknown
+            self.geometry_type = QgsWkbTypes.Type.Unknown
     
     def _calculate_extent(self, table_ref: str):
         """Calculate spatial extent of the layer"""
@@ -326,7 +327,7 @@ class DatabricksProvider(QgsVectorDataProvider):
                         ST_YMAX(ST_ENVELOPE(ST_UNION({escaped_geom_col}))) as max_y
                     FROM {table_ref}
                     WHERE {escaped_geom_col} IS NOT NULL
-                """)
+                """)  # nosec B608 - identifiers only, backtick-quoted via _escape_identifier (UC names cannot be bound as parameters)
                 result = cursor.fetchone()
                 
                 if result and all(x is not None for x in result):
@@ -336,10 +337,10 @@ class DatabricksProvider(QgsVectorDataProvider):
             QgsMessageLog.logMessage(
                 f"Error calculating extent: {str(e)}",
                 "Databricks Provider",
-                Qgis.Warning
+                Qgis.MessageLevel.Warning
             )
     
-    def _map_databricks_type_to_qgs(self, databricks_type: str) -> QVariant.Type:
+    def _map_databricks_type_to_qgs(self, databricks_type: str):
         """Map Databricks data types to QVariant types"""
         type_mapping = {
             'STRING': QVariant.String,
@@ -418,7 +419,7 @@ class DatabricksProvider(QgsVectorDataProvider):
                 if self.geometry_column:
                     field_names.append(f"ST_ASWKT({escaped_geom_col}) as geom_wkt")
                 
-                query = f"SELECT {', '.join(field_names)} FROM {table_ref}"
+                query = f"SELECT {', '.join(field_names)} FROM {table_ref}"  # nosec B608 - identifiers only, backtick-quoted via _escape_identifier (UC names cannot be bound as parameters)
                 
                 # Add WHERE clause for spatial filter
                 where_conditions = []
@@ -468,7 +469,7 @@ class DatabricksProvider(QgsVectorDataProvider):
                             QgsMessageLog.logMessage(
                                 f"Error converting geometry: {str(e)}",
                                 "Databricks Provider",
-                                Qgis.Warning
+                                Qgis.MessageLevel.Warning
                             )
                     
                     yield feature
@@ -477,7 +478,7 @@ class DatabricksProvider(QgsVectorDataProvider):
             QgsMessageLog.logMessage(
                 f"Error executing query: {str(e)}",
                 "Databricks Provider",
-                Qgis.Critical
+                Qgis.MessageLevel.Critical
             )
     
     def _shapely_to_qgs_geometry(self, shapely_geom):

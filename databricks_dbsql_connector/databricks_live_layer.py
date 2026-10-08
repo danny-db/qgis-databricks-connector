@@ -56,7 +56,8 @@ class LiveLayerFetchThread(QThread):
         if not identifier:
             return identifier
         identifier = identifier.strip('`')
-        return f"`{identifier}`"
+        # Double any backtick inside the name so it cannot close the quote
+        return "`" + identifier.replace("`", "``") + "`"
     
     def _get_escaped_table_ref(self) -> str:
         """Get properly escaped table reference"""
@@ -65,7 +66,7 @@ class LiveLayerFetchThread(QThread):
         escaped_parts = [self._escape_identifier(part) for part in parts]
         return '.'.join(escaped_parts)
     
-    def _build_viewport_query(self) -> str:
+    def _build_viewport_query(self):
         """Build SQL query with viewport bounding box filter"""
         table_ref = self._get_escaped_table_ref()
         geometry_column = self.table_info.get('geometry_column', 'geometry')
@@ -92,9 +93,9 @@ class LiveLayerFetchThread(QThread):
             FROM {table_ref}
             WHERE ST_INTERSECTS(
                 {escaped_geom_col},
-                ST_GEOMFROMTEXT('{viewport_wkt}', {self.srid})
+                ST_GEOMFROMTEXT(:viewport_wkt, :viewport_srid)
             )
-        """
+        """  # nosec B608 - identifiers only, backtick-quoted via _escape_identifier (UC names cannot be bound as parameters)
         
         # Add custom WHERE clause if specified
         custom_where = self.table_info.get('custom_where', '')
@@ -103,9 +104,11 @@ class LiveLayerFetchThread(QThread):
         
         # Add LIMIT clause
         if self.max_features > 0:
-            query += f" LIMIT {self.max_features}"
+            query += f" LIMIT {int(self.max_features)}"
         
-        return query
+        # Viewport values are bound as query parameters, not inlined
+        params = {"viewport_wkt": viewport_wkt, "viewport_srid": int(self.srid)}
+        return query, params
     
     def run(self):
         """Execute the data fetch"""
@@ -131,16 +134,16 @@ class LiveLayerFetchThread(QThread):
             
             self.progress.emit("Fetching data for viewport...")
             
-            query = self._build_viewport_query()
+            query, params = self._build_viewport_query()
             
             QgsMessageLog.logMessage(
                 f"Live layer query: {query[:500]}...",
                 "Databricks Live Layer",
-                Qgis.Info
+                Qgis.MessageLevel.Info
             )
             
             with connection.cursor() as cursor:
-                cursor.execute(query)
+                cursor.execute(query, params)
                 rows = cursor.fetchall()
             
             connection.close()
@@ -158,7 +161,7 @@ class LiveLayerFetchThread(QThread):
             QgsMessageLog.logMessage(
                 f"Error fetching live layer data: {str(e)}",
                 "Databricks Live Layer",
-                Qgis.Critical
+                Qgis.MessageLevel.Critical
             )
             self.finished.emit(False, f"Error: {str(e)}", [])
 
@@ -224,7 +227,7 @@ class DatabricksLiveLayerManager(QObject):
         QgsMessageLog.logMessage(
             f"Live layer manager created for '{layer.name()}'",
             "Databricks Live Layer",
-            Qgis.Info
+            Qgis.MessageLevel.Info
         )
     
     @property
@@ -320,7 +323,7 @@ class DatabricksLiveLayerManager(QObject):
             QgsMessageLog.logMessage(
                 "Skipping refresh - extent unchanged",
                 "Databricks Live Layer",
-                Qgis.Info
+                Qgis.MessageLevel.Info
             )
             return
         
@@ -366,7 +369,7 @@ class DatabricksLiveLayerManager(QObject):
             QgsMessageLog.logMessage(
                 f"Live layer refresh failed: {message}",
                 "Databricks Live Layer",
-                Qgis.Warning
+                Qgis.MessageLevel.Warning
             )
             return
         
@@ -381,7 +384,7 @@ class DatabricksLiveLayerManager(QObject):
             QgsMessageLog.logMessage(
                 f"Live layer refreshed with {feature_count} features",
                 "Databricks Live Layer",
-                Qgis.Info
+                Qgis.MessageLevel.Info
             )
             
         except Exception as e:
@@ -389,7 +392,7 @@ class DatabricksLiveLayerManager(QObject):
             QgsMessageLog.logMessage(
                 f"Error updating layer features: {str(e)}",
                 "Databricks Live Layer",
-                Qgis.Critical
+                Qgis.MessageLevel.Critical
             )
     
     def _parse_wkb_hex(self, wkb_hex) -> Optional[QgsGeometry]:
@@ -426,7 +429,7 @@ class DatabricksLiveLayerManager(QObject):
             QgsMessageLog.logMessage(
                 f"Error parsing WKB: {str(e)}",
                 "Databricks Live Layer",
-                Qgis.Warning
+                Qgis.MessageLevel.Warning
             )
             return None
     
@@ -488,7 +491,7 @@ class DatabricksLiveLayerManager(QObject):
                     QgsMessageLog.logMessage(
                         f"Error processing feature: {str(e)}",
                         "Databricks Live Layer",
-                        Qgis.Warning
+                        Qgis.MessageLevel.Warning
                     )
             
             # Add features to provider
@@ -557,14 +560,16 @@ class DatabricksLiveLayerManager(QObject):
     def cleanup(self):
         """Clean up resources"""
         # Disconnect signals
+        # disconnect() raises TypeError/RuntimeError if the slot isn't
+        # connected (or the object is already gone); nothing to undo then.
         try:
             self.iface.mapCanvas().extentsChanged.disconnect(self._on_extent_changed)
-        except:
+        except (TypeError, RuntimeError):
             pass
         
         try:
             QgsProject.instance().layerWillBeRemoved.disconnect(self._on_layer_removed)
-        except:
+        except (TypeError, RuntimeError):
             pass
         
         # Stop timer
@@ -578,7 +583,7 @@ class DatabricksLiveLayerManager(QObject):
         QgsMessageLog.logMessage(
             f"Live layer manager cleaned up",
             "Databricks Live Layer",
-            Qgis.Info
+            Qgis.MessageLevel.Info
         )
 
 
@@ -604,7 +609,7 @@ class LiveLayerRegistry:
         QgsMessageLog.logMessage(
             f"Registered live layer manager for layer {layer_id}",
             "Databricks Live Layer",
-            Qgis.Info
+            Qgis.MessageLevel.Info
         )
     
     def unregister(self, layer_id: str):
@@ -615,7 +620,7 @@ class LiveLayerRegistry:
             QgsMessageLog.logMessage(
                 f"Unregistered live layer manager for layer {layer_id}",
                 "Databricks Live Layer",
-                Qgis.Info
+                Qgis.MessageLevel.Info
             )
     
     def get(self, layer_id: str) -> Optional[DatabricksLiveLayerManager]:

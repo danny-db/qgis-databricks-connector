@@ -175,7 +175,7 @@ class TableDiscoveryThread(QThread):
             QgsMessageLog.logMessage(
                 f"Error discovering tables: {str(e)}",
                 "Databricks Connector",
-                Qgis.Critical
+                Qgis.MessageLevel.Critical
             )
         
         self.finished.emit(tables)
@@ -206,7 +206,8 @@ class LayerLoadingThread(QThread):
             return identifier
         # Remove existing backticks to avoid double-escaping
         identifier = identifier.strip('`')
-        return f"`{identifier}`"
+        # Double any backtick inside the name so it cannot close the quote
+        return "`" + identifier.replace("`", "``") + "`"
     
     def _get_escaped_table_ref(self):
         """Get properly escaped table reference from full_name.
@@ -251,7 +252,7 @@ class LayerLoadingThread(QThread):
                 QgsMessageLog.logMessage(
                     f"Processing schema for table {table_ref}, geometry column: {geometry_column}",
                     "Databricks Connector",
-                    Qgis.Info
+                    Qgis.MessageLevel.Info
                 )
                 
                 for row in schema_info:
@@ -261,7 +262,7 @@ class LayerLoadingThread(QThread):
                     QgsMessageLog.logMessage(
                         f"Column: {col_name}, Type: {col_type}",
                         "Databricks Connector",
-                        Qgis.Info
+                        Qgis.MessageLevel.Info
                     )
 
                     # CRITICAL FIX: Skip geometry column from attributes
@@ -273,7 +274,7 @@ class LayerLoadingThread(QThread):
                             QgsMessageLog.logMessage(
                                 f"Skipping potential geometry text column: {col_name} ({col_type})",
                                 "Databricks Connector",
-                                Qgis.Info
+                                Qgis.MessageLevel.Info
                             )
                         else:
                             qgs_type = self._map_databricks_type_to_qgs(col_type)
@@ -282,14 +283,14 @@ class LayerLoadingThread(QThread):
                             QgsMessageLog.logMessage(
                                 f"Added attribute field: {col_name} ({qgs_type})",
                                 "Databricks Connector",
-                                Qgis.Info
+                                Qgis.MessageLevel.Info
                             )
                     else:
                         # This is the geometry column - skip it from attributes
                         QgsMessageLog.logMessage(
                             f"Skipping geometry column: {col_name} ({col_type})",
                             "Databricks Connector",
-                            Qgis.Info
+                            Qgis.MessageLevel.Info
                         )
                 
                 self.progress.emit("Fetching data...")
@@ -306,7 +307,7 @@ class LayerLoadingThread(QThread):
                 escaped_geom_col = self._escape_identifier(geometry_column)
                 select_clause.append(f"ST_ASWKT({escaped_geom_col}) as geom_wkt")
 
-                query = f"SELECT {', '.join(select_clause)} FROM {table_ref}"
+                query = f"SELECT {', '.join(select_clause)} FROM {table_ref}"  # nosec B608 - identifiers only, backtick-quoted via _escape_identifier (UC names cannot be bound as parameters)
 
                 if self.max_features > 0:
                     query += f" LIMIT {self.max_features}"
@@ -314,13 +315,13 @@ class LayerLoadingThread(QThread):
                 QgsMessageLog.logMessage(
                     f"Query fields: {select_clause}",
                     "Databricks Connector",
-                    Qgis.Info
+                    Qgis.MessageLevel.Info
                 )
                 
                 QgsMessageLog.logMessage(
                     f"Executing query: {query}",
                     "Databricks Connector",
-                    Qgis.Info
+                    Qgis.MessageLevel.Info
                 )
                 
                 cursor.execute(query)
@@ -329,7 +330,7 @@ class LayerLoadingThread(QThread):
                 QgsMessageLog.logMessage(
                     f"Retrieved {len(rows)} rows",
                     "Databricks Connector",
-                    Qgis.Info
+                    Qgis.MessageLevel.Info
                 )
                 
                 self.progress.emit("Creating QGIS layer...")
@@ -362,13 +363,13 @@ class LayerLoadingThread(QThread):
                     f"Memory layer created: {layer_def}, WKB type: {memory_layer.wkbType()}, "
                     f"detected WKB: {wkb_geom_type}, provider valid: {memory_layer.dataProvider().isValid()}",
                     "Databricks Connector",
-                    Qgis.Info
+                    Qgis.MessageLevel.Info
                 )
                 
                 QgsMessageLog.logMessage(
                     f"Created memory layer: {layer_def}",
                     "Databricks Connector",
-                    Qgis.Info
+                    Qgis.MessageLevel.Info
                 )
                 
                 # Add fields directly to provider (no edit mode - avoids strict type validation)
@@ -378,7 +379,7 @@ class LayerLoadingThread(QThread):
                     QgsMessageLog.logMessage(
                         f"Failed to add attributes to layer provider",
                         "Databricks Connector",
-                        Qgis.Critical
+                        Qgis.MessageLevel.Critical
                     )
                 
                 memory_layer.updateFields()
@@ -387,7 +388,7 @@ class LayerLoadingThread(QThread):
                     f"Added {len(fields)} attribute fields to layer. Add result: {add_result}, "
                     f"layer field count: {memory_layer.fields().count()}",
                     "Databricks Connector",
-                    Qgis.Info
+                    Qgis.MessageLevel.Info
                 )
                 
                 self.progress.emit(f"Loading {len(rows)} features...")
@@ -411,7 +412,7 @@ class LayerLoadingThread(QThread):
                         QgsMessageLog.logMessage(
                             f"Feature {i} raw attributes: {attrs}",
                             "Databricks Connector",
-                            Qgis.Info
+                            Qgis.MessageLevel.Info
                         )
                         
                         # Debug: Log attribute types
@@ -419,7 +420,7 @@ class LayerLoadingThread(QThread):
                         QgsMessageLog.logMessage(
                             f"Feature {i} attribute types: {attr_types}",
                             "Databricks Connector",
-                            Qgis.Info
+                            Qgis.MessageLevel.Info
                         )
 
                         # Since query now matches layer fields exactly, attributes should align
@@ -463,7 +464,7 @@ class LayerLoadingThread(QThread):
                                 f"Attribute count mismatch - expected {len(layer_fields)}, got {len(processed_attrs)}. "
                                 f"Layer fields: {layer_field_names}",
                                 "Databricks Connector",
-                                Qgis.Warning
+                                Qgis.MessageLevel.Warning
                             )
 
                         # Debug: Log processed attributes
@@ -471,12 +472,12 @@ class LayerLoadingThread(QThread):
                         QgsMessageLog.logMessage(
                             f"Feature {i} processed attributes: {processed_attrs}",
                             "Databricks Connector",
-                            Qgis.Info
+                            Qgis.MessageLevel.Info
                         )
                         QgsMessageLog.logMessage(
                             f"Feature {i} processed attribute types: {processed_attr_types}",
                             "Databricks Connector",
-                            Qgis.Info
+                            Qgis.MessageLevel.Info
                         )
                         
                         feature.setAttributes(processed_attrs)
@@ -492,7 +493,7 @@ class LayerLoadingThread(QThread):
                                     QgsMessageLog.logMessage(
                                         f"Invalid geometry for feature {i}: {geom_wkt[:100]}...",
                                         "Databricks Connector",
-                                        Qgis.Warning
+                                        Qgis.MessageLevel.Warning
                                     )
                                     continue
                                 
@@ -527,7 +528,7 @@ class LayerLoadingThread(QThread):
                                         QgsMessageLog.logMessage(
                                             f"Skipping geometry type {feature_wkb} (expected {expected_wkb}) for feature {i}",
                                             "Databricks Connector",
-                                            Qgis.Info
+                                            Qgis.MessageLevel.Info
                                         )
                                         continue
                                 elif self.table_info.get('mixed_geometries', False):
@@ -536,7 +537,7 @@ class LayerLoadingThread(QThread):
                                         QgsMessageLog.logMessage(
                                             f"Skipping non-Point geometry (type {feature_wkb}) in Point layer for feature {i}",
                                             "Databricks Connector",
-                                            Qgis.Info
+                                            Qgis.MessageLevel.Info
                                         )
                                         continue
                                 elif not is_compatible_geom_type(feature_wkb, layer_wkb):
@@ -544,7 +545,7 @@ class LayerLoadingThread(QThread):
                                         f"Geometry type mismatch - Feature: {feature_wkb}, Layer: {layer_wkb}. "
                                         f"Skipping feature {i}.",
                                         "Databricks Connector",
-                                        Qgis.Warning
+                                        Qgis.MessageLevel.Warning
                                     )
                                     continue  # Skip incompatible features
                                 
@@ -559,34 +560,34 @@ class LayerLoadingThread(QThread):
                                         f"Feature {i} created successfully - ID: {feature.id()}, "
                                         f"Attrs: {len(feature.attributes())}, Geom: {not feature.geometry().isNull()}",
                                         "Databricks Connector",
-                                        Qgis.Info
+                                        Qgis.MessageLevel.Info
                                     )
                                 else:
                                     QgsMessageLog.logMessage(
                                         f"Feature {i} validation failed",
                                         "Databricks Connector",
-                                        Qgis.Warning
+                                        Qgis.MessageLevel.Warning
                                     )
                                 
                             except Exception as geom_e:
                                 QgsMessageLog.logMessage(
                                     f"Error parsing geometry for feature {i}: {str(geom_e)}, WKT: {geom_wkt[:100]}",
                                     "Databricks Connector",
-                                    Qgis.Warning
+                                    Qgis.MessageLevel.Warning
                                 )
                                 continue
                         else:
                             QgsMessageLog.logMessage(
                                 f"Empty geometry for feature {i}",
                                 "Databricks Connector",
-                                Qgis.Warning
+                                Qgis.MessageLevel.Warning
                             )
                             
                     except Exception as feat_e:
                         QgsMessageLog.logMessage(
                             f"Error processing feature {i}: {str(feat_e)}",
                             "Databricks Connector",
-                            Qgis.Critical
+                            Qgis.MessageLevel.Critical
                         )
                         continue
                 
@@ -595,7 +596,7 @@ class LayerLoadingThread(QThread):
                     QgsMessageLog.logMessage(
                         f"Adding {len(features_to_add)} features directly to provider",
                         "Databricks Connector",
-                        Qgis.Info
+                        Qgis.MessageLevel.Info
                     )
 
                     # Add all features at once via provider
@@ -604,13 +605,13 @@ class LayerLoadingThread(QThread):
                     QgsMessageLog.logMessage(
                         f"Provider addFeatures result: success={success}, added={len(added_features) if added_features else 0}",
                         "Databricks Connector",
-                        Qgis.Info
+                        Qgis.MessageLevel.Info
                     )
                 else:
                     QgsMessageLog.logMessage(
                         "No valid features to add to layer",
                         "Databricks Connector",
-                        Qgis.Warning
+                        Qgis.MessageLevel.Warning
                     )
                 
                 memory_layer.updateExtents()
@@ -619,7 +620,7 @@ class LayerLoadingThread(QThread):
                     f"Layer extent: {memory_layer.extent().toString()}, "
                     f"final feature count: {memory_layer.featureCount()}",
                     "Databricks Connector",
-                    Qgis.Info
+                    Qgis.MessageLevel.Info
                 )
                 
                 if memory_layer.featureCount() == 0:
@@ -638,11 +639,11 @@ class LayerLoadingThread(QThread):
             QgsMessageLog.logMessage(
                 f"Error in LayerLoadingThread: {str(e)}",
                 "Databricks Connector",
-                Qgis.Critical
+                Qgis.MessageLevel.Critical
             )
             self.finished.emit(False, f"Error loading layer: {str(e)}", None)
     
-    def _map_databricks_type_to_qgs(self, databricks_type: str) -> QVariant.Type:
+    def _map_databricks_type_to_qgs(self, databricks_type: str):
         """Map Databricks data types to QVariant types"""
         type_mapping = {
             'STRING': QVariant.String,
@@ -675,12 +676,12 @@ class LayerLoadingThread(QThread):
                 SELECT DISTINCT ST_GEOMETRYTYPE({escaped_geom_col}) as geom_type 
                 FROM {table_ref} 
                 WHERE {escaped_geom_col} IS NOT NULL
-                """
+                """  # nosec B608 - identifiers only, backtick-quoted via _escape_identifier (UC names cannot be bound as parameters)
                 
                 QgsMessageLog.logMessage(
                     f"Detecting geometry types with query: {query}",
                     "Databricks Connector",
-                    Qgis.Info
+                    Qgis.MessageLevel.Info
                 )
                 
                 cursor.execute(query)
@@ -691,7 +692,7 @@ class LayerLoadingThread(QThread):
                     QgsMessageLog.logMessage(
                         f"Found geometry types: {geometry_types}",
                         "Databricks Connector",
-                        Qgis.Info
+                        Qgis.MessageLevel.Info
                     )
                     
                     # Group geometry types by family - Point/MultiPoint, LineString/MultiLineString, Polygon/MultiPolygon
@@ -711,7 +712,7 @@ class LayerLoadingThread(QThread):
                     QgsMessageLog.logMessage(
                         f"Geometry families: {geometry_families}",
                         "Databricks Connector",
-                        Qgis.Info
+                        Qgis.MessageLevel.Info
                     )
                     
                     # Check if we have mixed geometry FAMILIES (truly incompatible types)
@@ -723,7 +724,7 @@ class LayerLoadingThread(QThread):
                         QgsMessageLog.logMessage(
                             f"Mixed geometry families detected: {geometry_families}. Will create separate layers for each type.",
                             "Databricks Connector",
-                            Qgis.Info
+                            Qgis.MessageLevel.Info
                         )
                     else:
                         # Single geometry family (e.g., both Polygon and MultiPolygon are POLYGON family)
@@ -740,7 +741,7 @@ class LayerLoadingThread(QThread):
                         QgsMessageLog.logMessage(
                             f"Single geometry family detected: {detected_family} -> {detected_type}",
                             "Databricks Connector",
-                            Qgis.Info
+                            Qgis.MessageLevel.Info
                         )
                 else:
                     # No geometries found, default to Point
@@ -751,7 +752,7 @@ class LayerLoadingThread(QThread):
             QgsMessageLog.logMessage(
                 f"Error detecting geometry types: {str(e)}. Using Point as default.",
                 "Databricks Connector",
-                Qgis.Warning
+                Qgis.MessageLevel.Warning
             )
             self.table_info['geometry_type'] = 'POINT'
             self.table_info['mixed_geometries'] = False
@@ -872,7 +873,7 @@ class DatabricksDialog(QDialog):
         self.access_token_label = QLabel("Access Token:")
         conn_layout.addWidget(self.access_token_label, 5, 0)
         self.access_token_edit = QLineEdit()
-        self.access_token_edit.setEchoMode(QLineEdit.Password)
+        self.access_token_edit.setEchoMode(QLineEdit.EchoMode.Password)
         self.access_token_edit.setPlaceholderText("dapi... (personal access token)")
         conn_layout.addWidget(self.access_token_edit, 5, 1)
 
@@ -930,7 +931,7 @@ class DatabricksDialog(QDialog):
         self.tables_widget.setHorizontalHeaderLabels([
             "Load", "Catalog", "Schema", "Table", "Geometry Column", "Geometry Type"
         ])
-        self.tables_widget.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.tables_widget.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         tables_layout.addWidget(self.tables_widget)
         
         layout.addWidget(tables_group)
@@ -1040,12 +1041,12 @@ class DatabricksDialog(QDialog):
             QgsMessageLog.logMessage(
                 f"Error loading saved connections: {str(e)}",
                 "Databricks Connector",
-                Qgis.Warning
+                Qgis.MessageLevel.Warning
             )
     
     def _on_live_mode_changed(self, state):
         """Handle live mode checkbox state change"""
-        is_live = state == Qt.Checked
+        is_live = state == Qt.CheckState.Checked
         self.live_options_widget.setVisible(is_live)
         
         # Update max features placeholder when live mode changes
@@ -1078,7 +1079,7 @@ class DatabricksDialog(QDialog):
             QgsMessageLog.logMessage(
                 f"Error loading connection {connection_name}: {str(e)}",
                 "Databricks Connector",
-                Qgis.Warning
+                Qgis.MessageLevel.Warning
             )
     
     def clear_connection_fields(self):
@@ -1136,7 +1137,7 @@ class DatabricksDialog(QDialog):
 
         self.progress_dialog = QProgressDialog(
             "Waiting for browser sign-in...", "Cancel", 0, 0, self)
-        self.progress_dialog.setWindowModality(Qt.WindowModal)
+        self.progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
         self.progress_dialog.show()
 
         self.sign_in_thread = OAuthSignInThread(hostname, http_path)
@@ -1210,11 +1211,11 @@ class DatabricksDialog(QDialog):
         reply = QMessageBox.question(
             self, "Confirm Delete", 
             f"Are you sure you want to delete the connection '{current_connection}'?",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
         )
         
-        if reply == QMessageBox.Yes:
+        if reply == QMessageBox.StandardButton.Yes:
             try:
                 # Remove from settings
                 self.settings.remove(f"DatabricksConnector/Connections/{current_connection}")
@@ -1304,7 +1305,7 @@ import sys
         msg = ("Waiting for browser sign-in..." if auth_method == AUTH_OAUTH_U2M
                else "Testing connection...")
         self.progress_dialog = QProgressDialog(msg, "Cancel", 0, 0, self)
-        self.progress_dialog.setWindowModality(Qt.WindowModal)
+        self.progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
         self.progress_dialog.show()
 
         # Start test thread
@@ -1341,7 +1342,7 @@ import sys
 
         # Show progress dialog
         self.progress_dialog = QProgressDialog("Discovering spatial tables...", "Cancel", 0, 0, self)
-        self.progress_dialog.setWindowModality(Qt.WindowModal)
+        self.progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
         self.progress_dialog.show()
 
         # Start discovery thread
@@ -1465,7 +1466,7 @@ import sys
         
         # Show progress dialog
         self.progress_dialog = QProgressDialog(f"Loading layer: {layer_name}", "Cancel", 0, 0, self)
-        self.progress_dialog.setWindowModality(Qt.WindowModal)
+        self.progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
         self.progress_dialog.show()
         
         # Start loading thread
@@ -1544,7 +1545,7 @@ import sys
                         QgsMessageLog.logMessage(
                             f"Created live layer manager for: {layer.name()}",
                             "Databricks Connector",
-                            Qgis.Info
+                            Qgis.MessageLevel.Info
                         )
                         
                         # Trigger initial refresh
@@ -1554,13 +1555,13 @@ import sys
                         QgsMessageLog.logMessage(
                             f"Error creating live layer manager: {str(live_e)}",
                             "Databricks Connector",
-                            Qgis.Warning
+                            Qgis.MessageLevel.Warning
                         )
                 
                 QgsMessageLog.logMessage(
                     f"Successfully added layer: {layer.name()} with {layer.featureCount()} features",
                     "Databricks Connector",
-                    Qgis.Info
+                    Qgis.MessageLevel.Info
                 )
                 
                 # Zoom to layer extent if it has features (skip for live layers - they'll refresh to viewport)
@@ -1582,13 +1583,13 @@ import sys
                 QgsMessageLog.logMessage(
                     f"Layer is invalid: {message}",
                     "Databricks Connector",
-                    Qgis.Critical
+                    Qgis.MessageLevel.Critical
                 )
         else:
             QgsMessageLog.logMessage(
                 f"Failed to load layer: {message}",
                 "Databricks Connector",
-                Qgis.Critical
+                Qgis.MessageLevel.Critical
             )
         
         # Move to next layer
@@ -1660,7 +1661,7 @@ import sys
                     QgsMessageLog.logMessage(
                         f"Creating additional layer for {geom_type}: {layer_name}",
                         "Databricks Connector",
-                        Qgis.Info
+                        Qgis.MessageLevel.Info
                     )
                     
                     # Start loading thread for this geometry type
@@ -1681,7 +1682,7 @@ import sys
             QgsMessageLog.logMessage(
                 f"Error creating additional geometry layers: {str(e)}",
                 "Databricks Connector",
-                Qgis.Critical
+                Qgis.MessageLevel.Critical
             )
     
     def on_additional_layer_loaded(self, success, message, layer):
@@ -1702,13 +1703,13 @@ import sys
             QgsMessageLog.logMessage(
                 f"Successfully added additional layer: {layer.name()} with {layer.featureCount()} features",
                 "Databricks Connector",
-                Qgis.Info
+                Qgis.MessageLevel.Info
             )
         else:
             QgsMessageLog.logMessage(
                 f"Failed to load additional layer: {message}",
                 "Databricks Connector",
-                Qgis.Warning
+                Qgis.MessageLevel.Warning
             )
     
     def _store_layer_metadata(self, layer):
@@ -1739,13 +1740,13 @@ import sys
             QgsMessageLog.logMessage(
                 f"Stored Databricks metadata on layer: {layer.name()}",
                 "Databricks Connector",
-                Qgis.Info
+                Qgis.MessageLevel.Info
             )
         except Exception as e:
             QgsMessageLog.logMessage(
                 f"Error storing layer metadata: {str(e)}",
                 "Databricks Connector",
-                Qgis.Warning
+                Qgis.MessageLevel.Warning
             )
     
     def open_custom_query(self):
@@ -1798,14 +1799,14 @@ import sys
                 QgsMessageLog.logMessage(
                     f"Failed to create Databricks provider layer: {layer.error().message()}",
                     "Databricks Connector",
-                    Qgis.Warning
+                    Qgis.MessageLevel.Warning
                 )
                 return None
         except Exception as e:
             QgsMessageLog.logMessage(
                 f"Error creating Databricks provider layer: {str(e)}",
                 "Databricks Connector",
-                Qgis.Warning
+                Qgis.MessageLevel.Warning
             )
             return None
     
@@ -1883,7 +1884,7 @@ class DatabaseStructureThread(QThread):
                 QgsMessageLog.logMessage(
                     f"Querying accessible database structure with: {info_query}",
                     "Query Dialog",
-                    Qgis.Info
+                    Qgis.MessageLevel.Info
                 )
                 
                 cursor.execute(info_query)
@@ -1892,7 +1893,7 @@ class DatabaseStructureThread(QThread):
                 QgsMessageLog.logMessage(
                     f"Found {len(results)} accessible columns across all tables",
                     "Query Dialog",
-                    Qgis.Info
+                    Qgis.MessageLevel.Info
                 )
                 
                 # Group results by catalog/schema/table
@@ -1928,7 +1929,7 @@ class DatabaseStructureThread(QThread):
                 QgsMessageLog.logMessage(
                     f"Loaded {total_catalogs} catalogs, {total_schemas} schemas, {total_tables} tables",
                     "Query Dialog",
-                    Qgis.Info
+                    Qgis.MessageLevel.Info
                 )
             
             connection.close()
@@ -1940,7 +1941,7 @@ class DatabaseStructureThread(QThread):
             QgsMessageLog.logMessage(
                 f"Error loading database structure: {str(e)}",
                 "Query Dialog",
-                Qgis.Critical
+                Qgis.MessageLevel.Critical
             )
             self.finished.emit({})
 
@@ -2047,14 +2048,14 @@ class QueryLayerCreationThread(QThread):
                     QgsMessageLog.logMessage(
                         f"User-specified geometry column '{self.geometry_column}' not found in query results. Available columns: {columns}",
                         "Query Dialog",
-                        Qgis.Warning
+                        Qgis.MessageLevel.Warning
                     )
                     self.geometry_column = None  # Reset and try auto-detection
                 else:
                     QgsMessageLog.logMessage(
                         f"Using user-specified geometry column: {self.geometry_column}",
                         "Query Dialog",
-                        Qgis.Info
+                        Qgis.MessageLevel.Info
                     )
             
             if not self.geometry_column:
@@ -2072,7 +2073,7 @@ class QueryLayerCreationThread(QThread):
                                 QgsMessageLog.logMessage(
                                     f"Auto-detected WKT geometry column: {col} (contains: {clean_sample[:50]}...)",
                                     "Query Dialog",
-                                    Qgis.Info
+                                    Qgis.MessageLevel.Info
                                 )
                                 break
                 
@@ -2085,7 +2086,7 @@ class QueryLayerCreationThread(QThread):
                             QgsMessageLog.logMessage(
                                 f"Auto-detected geometry column by name: {col}",
                                 "Query Dialog",
-                                Qgis.Info
+                                Qgis.MessageLevel.Info
                             )
                             break
             
@@ -2093,7 +2094,7 @@ class QueryLayerCreationThread(QThread):
                 QgsMessageLog.logMessage(
                     f"No geometry column detected. Available columns: {columns}. Layer will be created without geometry.",
                     "Query Dialog",
-                    Qgis.Info
+                    Qgis.MessageLevel.Info
                 )
             
             # Create fields for non-geometry columns
@@ -2106,7 +2107,7 @@ class QueryLayerCreationThread(QThread):
                     QgsMessageLog.logMessage(
                         f"Found geometry column '{col}' at index {i}",
                         "Query Dialog",
-                        Qgis.Info
+                        Qgis.MessageLevel.Info
                     )
                 else:
                     # Determine field type from first non-null value
@@ -2126,7 +2127,7 @@ class QueryLayerCreationThread(QThread):
                     QgsMessageLog.logMessage(
                         f"Added attribute field: {col} ({field_type})",
                         "Query Dialog",
-                        Qgis.Info
+                        Qgis.MessageLevel.Info
                     )
             
             # Determine geometry types from all geometries and handle mixed types
@@ -2162,7 +2163,7 @@ class QueryLayerCreationThread(QThread):
             QgsMessageLog.logMessage(
                 f"Detected geometry types in query results: {list(geometry_types_in_data)}, has_z={has_z}",
                 "Query Dialog",
-                Qgis.Info
+                Qgis.MessageLevel.Info
             )
             
             # Check if we have mixed geometry types
@@ -2170,7 +2171,7 @@ class QueryLayerCreationThread(QThread):
                 QgsMessageLog.logMessage(
                     f"Mixed geometry types detected: {list(geometry_types_in_data)}. Creating separate layers for each type.",
                     "Query Dialog",
-                    Qgis.Info
+                    Qgis.MessageLevel.Info
                 )
                 # Create separate layers for each geometry type
                 self._create_mixed_geometry_layers(columns, rows, fields, geom_col_index, geometry_types_in_data, has_z)
@@ -2196,8 +2197,11 @@ class QueryLayerCreationThread(QThread):
                                 geom_type = "LineString"
                             elif 'POLYGON' in geom_str or 'MULTIPOLYGON' in geom_str:
                                 geom_type = "Polygon"
-                    except:
-                        pass  # Keep default Point type
+                    except Exception as exc:
+                        # Keep the default Point type if the sample can't be parsed
+                        QgsMessageLog.logMessage(
+                            f"Could not detect geometry type from sample: {exc}",
+                            "Databricks Connector", Qgis.MessageLevel.Info)
             
             # Create memory layer — append Z suffix so QGIS 3.x accepts Z geometries
             if geom_col_index is not None:
@@ -2227,7 +2231,7 @@ class QueryLayerCreationThread(QThread):
             QgsMessageLog.logMessage(
                 f"Processing {len(rows)} rows. Geometry column index: {geom_col_index}",
                 "Query Dialog",
-                Qgis.Info
+                Qgis.MessageLevel.Info
             )
             
             for i, row in enumerate(rows):
@@ -2246,7 +2250,7 @@ class QueryLayerCreationThread(QThread):
                         QgsMessageLog.logMessage(
                             f"Feature {i}: Processing geometry WKT: {geom_wkt[:100]}...",
                             "Query Dialog",
-                            Qgis.Info
+                            Qgis.MessageLevel.Info
                         )
                         
                         # Strip SRID prefix before parsing
@@ -2256,7 +2260,7 @@ class QueryLayerCreationThread(QThread):
                             QgsMessageLog.logMessage(
                                 f"Feature {i}: Stripped SRID prefix: {clean_wkt[:100]}...",
                                 "Query Dialog",
-                                Qgis.Info
+                                Qgis.MessageLevel.Info
                             )
                         
                         # Parse geometry using QGIS built-in WKT parser
@@ -2268,27 +2272,27 @@ class QueryLayerCreationThread(QThread):
                             QgsMessageLog.logMessage(
                                 f"Feature {i}: Successfully set geometry",
                                 "Query Dialog",
-                                Qgis.Info
+                                Qgis.MessageLevel.Info
                             )
                         else:
                             QgsMessageLog.logMessage(
                                 f"Feature {i}: Invalid geometry after SRID stripping: {clean_wkt[:100]}...",
                                 "Query Dialog",
-                                Qgis.Warning
+                                Qgis.MessageLevel.Warning
                             )
                         
                     except Exception as e:
                         QgsMessageLog.logMessage(
                             f"Feature {i}: Error parsing geometry: {str(e)}, WKT: {geom_wkt[:100]}...",
                             "Query Dialog",
-                            Qgis.Warning
+                            Qgis.MessageLevel.Warning
                         )
                 else:
                     if geom_col_index is not None:
                         QgsMessageLog.logMessage(
                             f"Feature {i}: No geometry data (geom_col_index={geom_col_index}, row_len={len(row)}, value={row[geom_col_index] if geom_col_index < len(row) else 'N/A'})",
                             "Query Dialog",
-                            Qgis.Info
+                            Qgis.MessageLevel.Info
                         )
                 
                 features_to_add.append(feature)
@@ -2296,7 +2300,7 @@ class QueryLayerCreationThread(QThread):
             QgsMessageLog.logMessage(
                 f"Created {len(features_to_add)} features, {successful_geometries} with valid geometries",
                 "Query Dialog",
-                Qgis.Info
+                Qgis.MessageLevel.Info
             )
             
             # Add features directly to provider (no edit mode)
@@ -2304,7 +2308,7 @@ class QueryLayerCreationThread(QThread):
             QgsMessageLog.logMessage(
                 f"addFeatures result: success={success}, added={len(added) if added else 0}, "
                 f"layer_def={layer_def}, provider_error='{provider.lastError()}'",
-                "Query Dialog", Qgis.Info
+                "Query Dialog", Qgis.MessageLevel.Info
             )
             memory_layer.updateExtents()
 
@@ -2315,7 +2319,7 @@ class QueryLayerCreationThread(QThread):
             QgsMessageLog.logMessage(
                 f"Layer creation summary: {successful_features} features in layer out of {total_features} rows processed. Geometry column: {self.geometry_column}, Geometry column index: {geom_col_index}, Successful geometries: {successful_geometries}",
                 "Query Dialog",
-                Qgis.Info
+                Qgis.MessageLevel.Info
             )
             
             if successful_features < total_features:
@@ -2339,7 +2343,7 @@ class QueryLayerCreationThread(QThread):
                 QgsMessageLog.logMessage(
                     f"Creating layer for geometry type: {geom_type}",
                     "Query Dialog",
-                    Qgis.Info
+                    Qgis.MessageLevel.Info
                 )
                 
                 # Filter rows for this specific geometry type
@@ -2371,14 +2375,14 @@ class QueryLayerCreationThread(QThread):
                     QgsMessageLog.logMessage(
                         f"No features found for geometry type: {geom_type}, skipping",
                         "Query Dialog",
-                        Qgis.Info
+                        Qgis.MessageLevel.Info
                     )
                     continue
                 
                 QgsMessageLog.logMessage(
                     f"Creating {geom_type} layer with {len(filtered_rows)} filtered rows",
                     "Query Dialog",
-                    Qgis.Info
+                    Qgis.MessageLevel.Info
                 )
                 
                 # Create layer for this geometry type - SIMPLE VERSION
@@ -2397,13 +2401,13 @@ class QueryLayerCreationThread(QThread):
                     QgsMessageLog.logMessage(
                         f"Successfully created {geom_type} layer with {layer.featureCount()} features",
                         "Query Dialog",
-                        Qgis.Info
+                        Qgis.MessageLevel.Info
                     )
                 else:
                     QgsMessageLog.logMessage(
                         f"Failed to create {geom_type} layer or layer has 0 features",
                         "Query Dialog",
-                        Qgis.Warning
+                        Qgis.MessageLevel.Warning
                     )
             
             if created_layers:
@@ -2423,7 +2427,7 @@ class QueryLayerCreationThread(QThread):
             QgsMessageLog.logMessage(
                 f"Error creating mixed geometry layers: {str(e)}",
                 "Query Dialog",
-                Qgis.Critical
+                Qgis.MessageLevel.Critical
             )
             self.finished.emit(False, f"Error creating mixed geometry layers: {str(e)}", None)
     
@@ -2436,7 +2440,7 @@ class QueryLayerCreationThread(QThread):
             memory_layer = QgsVectorLayer(layer_def, layer_name, "memory")
 
             if not memory_layer.isValid():
-                QgsMessageLog.logMessage(f"Failed to create memory layer: {layer_def}", "Query Dialog", Qgis.Critical)
+                QgsMessageLog.logMessage(f"Failed to create memory layer: {layer_def}", "Query Dialog", Qgis.MessageLevel.Critical)
                 return None
 
             # Add fields directly to provider (no edit mode)
@@ -2468,12 +2472,12 @@ class QueryLayerCreationThread(QThread):
             final_count = memory_layer.featureCount()
             QgsMessageLog.logMessage(
                 f"Created {geom_type} layer '{layer_name}': {final_count} features",
-                "Query Dialog", Qgis.Info
+                "Query Dialog", Qgis.MessageLevel.Info
             )
             return memory_layer if final_count > 0 else None
 
         except Exception as e:
-            QgsMessageLog.logMessage(f"Error creating layer {geom_type}: {str(e)}", "Query Dialog", Qgis.Critical)
+            QgsMessageLog.logMessage(f"Error creating layer {geom_type}: {str(e)}", "Query Dialog", Qgis.MessageLevel.Critical)
             return None
     
     def _is_wkt_format(self, value_str):
@@ -2499,7 +2503,7 @@ class QueryLayerCreationThread(QThread):
             QgsMessageLog.logMessage(
                 f"Detected WKT format: {value_str[:50]}...",
                 "Query Dialog",
-                Qgis.Info
+                Qgis.MessageLevel.Info
             )
         
         return is_wkt
@@ -2553,7 +2557,7 @@ class QueryLayerCreationThread(QThread):
                 QgsMessageLog.logMessage(
                     "Query already contains geometry conversion functions, using as-is",
                     "Query Dialog",
-                    Qgis.Info
+                    Qgis.MessageLevel.Info
                 )
                 return query
             
@@ -2566,7 +2570,7 @@ class QueryLayerCreationThread(QThread):
                 QgsMessageLog.logMessage(
                     "Could not find FROM clause in query, using query as-is",
                     "Query Dialog",
-                    Qgis.Info
+                    Qgis.MessageLevel.Info
                 )
                 return query
             
@@ -2586,7 +2590,7 @@ class QueryLayerCreationThread(QThread):
                 QgsMessageLog.logMessage(
                     "No geometry columns found in queried tables",
                     "Query Dialog",
-                    Qgis.Info
+                    Qgis.MessageLevel.Info
                 )
                 return query
             
@@ -2597,7 +2601,7 @@ class QueryLayerCreationThread(QThread):
                 QgsMessageLog.logMessage(
                     f"Modified query to add ST_ASWKT conversion:\nOriginal: {query}\nModified: {modified_query}",
                     "Query Dialog",
-                    Qgis.Info
+                    Qgis.MessageLevel.Info
                 )
             
             return modified_query
@@ -2606,7 +2610,7 @@ class QueryLayerCreationThread(QThread):
             QgsMessageLog.logMessage(
                 f"Error analyzing query for geometry conversion: {str(e)}, using original query",
                 "Query Dialog",
-                Qgis.Warning
+                Qgis.MessageLevel.Warning
             )
             return query
     
@@ -2645,12 +2649,12 @@ class QueryLayerCreationThread(QThread):
                         FROM system.information_schema.columns 
                         WHERE {where_clause}
                         AND data_type IN ('GEOGRAPHY', 'GEOMETRY')
-                    """
+                    """  # nosec B608 - values are bound as :parameters; only fixed column predicates are joined
                     
                     QgsMessageLog.logMessage(
                         f"Checking for geometry columns in {table_name}",
                         "Query Dialog",
-                        Qgis.Info
+                        Qgis.MessageLevel.Info
                     )
                     
                     cursor.execute(info_query, params)
@@ -2669,14 +2673,14 @@ class QueryLayerCreationThread(QThread):
                         QgsMessageLog.logMessage(
                             f"Found geometry column: {column_name} ({data_type}) in table {table_name}",
                             "Query Dialog",
-                            Qgis.Info
+                            Qgis.MessageLevel.Info
                         )
         
         except Exception as e:
             QgsMessageLog.logMessage(
                 f"Error getting geometry columns: {str(e)}",
                 "Query Dialog",
-                Qgis.Warning
+                Qgis.MessageLevel.Warning
             )
         
         return geometry_columns
@@ -2700,7 +2704,7 @@ class QueryLayerCreationThread(QThread):
                 QgsMessageLog.logMessage(
                     "SELECT * detected - cannot automatically add ST_ASWKT. Use explicit column names for automatic conversion.",
                     "Query Dialog",
-                    Qgis.Info
+                    Qgis.MessageLevel.Info
                 )
                 return query
             
@@ -2739,7 +2743,7 @@ class QueryLayerCreationThread(QThread):
             QgsMessageLog.logMessage(
                 f"Error modifying SELECT clause: {str(e)}",
                 "Query Dialog",
-                Qgis.Warning
+                Qgis.MessageLevel.Warning
             )
             return query
     
@@ -2773,7 +2777,7 @@ class QueryLayerCreationThread(QThread):
             QgsMessageLog.logMessage(
                 f"Converting geometry column {clean_column} to WKT format",
                 "Query Dialog",
-                Qgis.Info
+                Qgis.MessageLevel.Info
             )
             
             # Wrap with ST_ASWKT
@@ -2813,7 +2817,7 @@ class DatabricksQueryDialog(QDialog):
         layout = QVBoxLayout(self)
         
         # Create horizontal splitter for database browser and query/results
-        main_splitter = QSplitter(Qt.Horizontal)
+        main_splitter = QSplitter(Qt.Orientation.Horizontal)
         layout.addWidget(main_splitter)
         
         # Left side: Database browser
@@ -2858,7 +2862,7 @@ class DatabricksQueryDialog(QDialog):
     def setup_query_results_area(self):
         """Setup the query and results area"""
         # Create splitter for query and results
-        splitter = QSplitter(Qt.Vertical)
+        splitter = QSplitter(Qt.Orientation.Vertical)
         
         return self.setup_query_and_results(splitter)
     
@@ -2928,7 +2932,7 @@ class DatabricksQueryDialog(QDialog):
         # Results table
         self.results_table = QTableWidget()
         self.results_table.setAlternatingRowColors(True)
-        self.results_table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
+        self.results_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         results_layout.addWidget(self.results_table)
         
         # Results info
@@ -2980,7 +2984,7 @@ class DatabricksQueryDialog(QDialog):
         
         # Show progress dialog
         self.progress_dialog = QProgressDialog("Executing query...", "Cancel", 0, 0, self)
-        self.progress_dialog.setWindowModality(Qt.WindowModal)
+        self.progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
         self.progress_dialog.show()
         
         # Start query thread
@@ -3072,7 +3076,7 @@ class DatabricksQueryDialog(QDialog):
         
         # Show progress dialog
         self.progress_dialog = QProgressDialog("Creating layer...", "Cancel", 0, 0, self)
-        self.progress_dialog.setWindowModality(Qt.WindowModal)
+        self.progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
         self.progress_dialog.show()
         
         # Start layer creation thread
@@ -3102,7 +3106,7 @@ class DatabricksQueryDialog(QDialog):
             QgsMessageLog.logMessage(
                 f"Added query layer: {layer.name()} with {layer.featureCount()} features",
                 "Query Dialog",
-                Qgis.Info
+                Qgis.MessageLevel.Info
             )
             
             QMessageBox.information(self, "Layer Added", 
@@ -3156,12 +3160,12 @@ class DatabricksQueryDialog(QDialog):
         for catalog_name, schemas in structure.items():
             catalog_item = QTreeWidgetItem(self.db_tree)
             catalog_item.setText(0, f"📁 {catalog_name}")
-            catalog_item.setData(0, Qt.UserRole, {'type': 'catalog', 'name': catalog_name})
+            catalog_item.setData(0, Qt.ItemDataRole.UserRole, {'type': 'catalog', 'name': catalog_name})
             
             for schema_name, tables in schemas.items():
                 schema_item = QTreeWidgetItem(catalog_item)
                 schema_item.setText(0, f"📂 {schema_name}")
-                schema_item.setData(0, Qt.UserRole, {'type': 'schema', 'catalog': catalog_name, 'name': schema_name})
+                schema_item.setData(0, Qt.ItemDataRole.UserRole, {'type': 'schema', 'catalog': catalog_name, 'name': schema_name})
                 
                 for table_name, table_info in tables.items():
                     table_item = QTreeWidgetItem(schema_item)
@@ -3171,7 +3175,7 @@ class DatabricksQueryDialog(QDialog):
                     table_icon = "🗺️" if has_geometry else "📋"
                     
                     table_item.setText(0, f"{table_icon} {table_name}")
-                    table_item.setData(0, Qt.UserRole, {
+                    table_item.setData(0, Qt.ItemDataRole.UserRole, {
                         'type': 'table', 
                         'catalog': catalog_name,
                         'schema': schema_name,
@@ -3188,7 +3192,7 @@ class DatabricksQueryDialog(QDialog):
                         col_type = col_info.get('type', 'unknown')
                         
                         col_item.setText(0, f"{col_icon} {col_info['name']} ({col_type})")
-                        col_item.setData(0, Qt.UserRole, {
+                        col_item.setData(0, Qt.ItemDataRole.UserRole, {
                             'type': 'column',
                             'catalog': catalog_name,
                             'schema': schema_name,
@@ -3203,7 +3207,7 @@ class DatabricksQueryDialog(QDialog):
     
     def on_tree_item_double_clicked(self, item, column):
         """Handle double-click on tree item to insert into query"""
-        data = item.data(0, Qt.UserRole)
+        data = item.data(0, Qt.ItemDataRole.UserRole)
         if not data:
             return
         
@@ -3229,5 +3233,5 @@ class DatabricksQueryDialog(QDialog):
         QgsMessageLog.logMessage(
             f"Inserted '{text_to_insert}' into query",
             "Query Dialog",
-            Qgis.Info
+            Qgis.MessageLevel.Info
         )
