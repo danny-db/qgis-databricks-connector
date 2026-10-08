@@ -1087,6 +1087,7 @@ class DatabricksDialog(QDialog):
         self.hostname_edit.clear()
         self.http_path_edit.clear()
         self.access_token_edit.clear()
+        self._set_auth_method(AUTH_PAT)
 
     def _auth_method(self):
         """Return the auth-method identifier for the selected combo entry."""
