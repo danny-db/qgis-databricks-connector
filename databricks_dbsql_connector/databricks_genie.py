@@ -107,13 +107,22 @@ _GEOM_COL_NAMES = frozenset([
 # HTTP helper
 # ---------------------------------------------------------------------------
 
+def _https_url(hostname, path):
+    """Build a workspace URL, refusing anything that isn't plain https."""
+    url = f"https://{hostname}{path}"
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme != 'https' or not parsed.netloc or '@' in parsed.netloc:
+        raise RuntimeError(f"Refusing non-https workspace URL: {url}")
+    return url
+
+
 def _api_request(hostname, path, access_token, method='GET', body=None,
                  timeout=30):
     """Execute a Databricks REST API call and return the parsed JSON body.
 
     Raises ``urllib.error.URLError`` or ``RuntimeError`` on failure.
     """
-    url = f"https://{hostname}{path}"
+    url = _https_url(hostname, path)
     headers = {
         'Authorization': f'Bearer {access_token}',
         'Content-Type': 'application/json',
@@ -122,7 +131,7 @@ def _api_request(hostname, path, access_token, method='GET', body=None,
     data = json.dumps(body).encode('utf-8') if body else None
     req = urllib.request.Request(url, data=data, headers=headers, method=method)
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # nosec B310 - https only (_https_url)
             raw = resp.read().decode('utf-8')
             return json.loads(raw) if raw else {}
     except urllib.error.HTTPError as exc:
@@ -130,8 +139,8 @@ def _api_request(hostname, path, access_token, method='GET', body=None,
         err_body = ''
         try:
             err_body = exc.read().decode('utf-8', errors='replace')
-        except Exception:
-            pass
+        except (OSError, ValueError):
+            err_body = ''   # no readable error body; status code still reported
         if exc.code in (401, 403):
             raise RuntimeError(
                 f"Authentication failed ({exc.code}). "
@@ -149,9 +158,9 @@ def _api_request(hostname, path, access_token, method='GET', body=None,
 def _api_request_bytes(hostname, path, access_token, timeout=60):
     """GET a binary Databricks REST resource (e.g. a chart PNG)."""
     req = urllib.request.Request(
-        f"https://{hostname}{path}",
+        _https_url(hostname, path),
         headers={'Authorization': f'Bearer {access_token}'}, method='GET')
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
+    with urllib.request.urlopen(req, timeout=timeout) as resp:  # nosec B310 - https only (_https_url)
         return resp.read()
 
 
@@ -162,7 +171,7 @@ def auto_chart(columns, rows):
         png = render_spec(spec, columns, rows) if spec else None
     except Exception as exc:  # never let a chart break the answer
         QgsMessageLog.logMessage(f"Auto chart failed: {exc}",
-                                 "Databricks Connector", Qgis.Warning)
+                                 "Databricks Connector", Qgis.MessageLevel.Warning)
         png = None
     return {'title': 'Chart', 'png': png, 'auto': True} if png else None
 
@@ -359,7 +368,7 @@ class GenieApiThread(QThread):
                 except Exception as exc:
                     QgsMessageLog.logMessage(
                         f"Genie chart download failed: {exc}",
-                        "Databricks Connector", Qgis.Warning)
+                        "Databricks Connector", Qgis.MessageLevel.Warning)
             if not charts and rows:
                 chart = auto_chart(columns, rows)
                 if chart:
@@ -417,9 +426,9 @@ class GenieReQueryThread(QThread):
                     "re-query but is not installed.")
                 return
 
-            escaped_geom = f"`{self.geom_col.strip('`')}`"
+            escaped_geom = "`" + self.geom_col.strip('`').replace('`', '``') + "`"
             wrapped_query = (
-                f"SELECT *, ST_ASWKT({escaped_geom}) AS __genie_wkt "
+                f"SELECT *, ST_ASWKT({escaped_geom}) AS __genie_wkt "  # nosec B608 - re-runs the SQL Genie generated for this user; identifier backtick-escaped
                 f"FROM ({self.query_statement}) __genie_sub"
             )
 
@@ -493,14 +502,14 @@ class GenieDialog(QDialog):
         conn_row = QHBoxLayout()
         conn_row.addWidget(QLabel("Connection:"))
         self.conn_combo = QComboBox()
-        self.conn_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.conn_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.conn_combo.currentIndexChanged.connect(self._on_connection_changed)
         conn_row.addWidget(self.conn_combo)
 
         self.space_label = QLabel("Genie Agent:")
         conn_row.addWidget(self.space_label)
         self.space_combo = QComboBox()
-        self.space_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.space_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         conn_row.addWidget(self.space_combo)
         root.addLayout(conn_row)
 
@@ -536,7 +545,7 @@ class GenieDialog(QDialog):
 
         # ── Results table ─────────────────────────────────────────────────
         self.results_table = QTableWidget()
-        self.results_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.results_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.results_table.setMinimumHeight(100)
         self.results_table.horizontalHeader().setStretchLastSection(True)
         root.addWidget(self.results_table, stretch=2)
@@ -658,7 +667,7 @@ class GenieDialog(QDialog):
         self.status_label.setText(f"Status: {msg}")
         QgsMessageLog.logMessage(
             f"Genie space list error: {msg}",
-            "Databricks Connector", Qgis.Warning)
+            "Databricks Connector", Qgis.MessageLevel.Warning)
 
     # -- Thinking indicator -------------------------------------------------
 
@@ -846,7 +855,7 @@ class GenieDialog(QDialog):
         self._append_chat_error(msg)
         QgsMessageLog.logMessage(
             f"Genie API error: {msg}",
-            "Databricks Connector", Qgis.Warning)
+            "Databricks Connector", Qgis.MessageLevel.Warning)
 
     # -- Copy / Toggle SQL --------------------------------------------------
 
@@ -1199,7 +1208,7 @@ class GenieDialog(QDialog):
                 f"Status: Added {len(layers)} layer(s) with {count} features")
             QgsMessageLog.logMessage(
                 f"Genie: added {len(layers)} layer(s) ({count} features)",
-                "Databricks Connector", Qgis.Info)
+                "Databricks Connector", Qgis.MessageLevel.Info)
         else:
             self.status_label.setText("Status: No layers created")
 
@@ -1211,7 +1220,7 @@ class GenieDialog(QDialog):
         QMessageBox.warning(self, "Layer Error", msg)
         QgsMessageLog.logMessage(
             f"Genie layer error: {msg}",
-            "Databricks Connector", Qgis.Warning)
+            "Databricks Connector", Qgis.MessageLevel.Warning)
 
     # -- Clear chat ---------------------------------------------------------
 

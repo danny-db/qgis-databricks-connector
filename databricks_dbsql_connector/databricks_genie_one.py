@@ -31,7 +31,7 @@ from qgis.PyQt.QtWidgets import QComboBox, QHBoxLayout, QLabel
 from qgis.core import Qgis, QgsMessageLog
 
 from .databricks_auth import AUTH_PAT, get_bearer_token
-from .databricks_genie import GenieDialog, auto_chart
+from .databricks_genie import GenieDialog, _https_url, auto_chart
 from .databricks_genie_charts import render_spec
 
 # Unity Gateway endpoint for Genie One. The older Beta endpoint
@@ -52,7 +52,7 @@ class GenieOneClient:
     """Tiny MCP client for the Genie One server: initialise once, call tools."""
 
     def __init__(self, hostname, access_token, timeout=120):
-        self.url = f"https://{hostname}{GENIE_ONE_MCP_PATH}"
+        self.url = _https_url(hostname, GENIE_ONE_MCP_PATH)
         self.access_token = access_token
         self.timeout = timeout
         self.session_id = None
@@ -71,7 +71,7 @@ class GenieOneClient:
             self.url, data=json.dumps(payload).encode('utf-8'),
             headers=headers, method='POST')
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+            with urllib.request.urlopen(req, timeout=self.timeout) as resp:  # nosec B310 - https only (_https_url)
                 self.session_id = (resp.headers.get('Mcp-Session-Id')
                                    or self.session_id)
                 ctype = resp.headers.get('Content-Type') or ''
@@ -80,8 +80,8 @@ class GenieOneClient:
             body = ''
             try:
                 body = exc.read().decode('utf-8', errors='replace')[:300]
-            except Exception:
-                pass
+            except (OSError, ValueError):
+                body = ''   # no readable error body; status code still reported
             if exc.code in (401, 403):
                 raise RuntimeError(
                     f"Genie One authentication failed ({exc.code}). Sign in "
@@ -265,8 +265,11 @@ class GenieOneApiThread(QThread):
                     try:
                         client.call_tool('genie_cancel_response',
                                          {'conversation_id': conversation_id})
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        # Best effort: the local request is cancelled anyway
+                        QgsMessageLog.logMessage(
+                            f"Genie One cancel request failed: {exc}",
+                            "Databricks Connector", Qgis.MessageLevel.Info)
                     raise RuntimeError("Cancelled by user.")
                 try:
                     poll = client.call_tool('genie_poll_response', {
@@ -344,7 +347,7 @@ class GenieOneApiThread(QThread):
                     client, conversation_id, response_id)
             except Exception as exc:   # view tools unavailable: no charts
                 QgsMessageLog.logMessage(f"Genie One charts unavailable: {exc}",
-                                         "Databricks Connector", Qgis.Info)
+                                         "Databricks Connector", Qgis.MessageLevel.Info)
                 break
             # The view stream can lag the final answer by a few seconds:
             # wait until it is complete and holds every embedded chart.
@@ -365,7 +368,7 @@ class GenieOneApiThread(QThread):
                 except Exception as exc:
                     QgsMessageLog.logMessage(
                         f"Genie One chart '{viz['title']}' failed: {exc}",
-                        "Databricks Connector", Qgis.Warning)
+                        "Databricks Connector", Qgis.MessageLevel.Warning)
             if not png:
                 continue
             marker = f'[[chart:{len(charts)}]]'
