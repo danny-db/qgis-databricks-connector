@@ -76,8 +76,9 @@ class DatabricksConnector:
         # Browser provider instance
         self.browser_provider = None
         
-        # Genie dialog (non-modal, kept alive)
+        # Genie dialogs (non-modal, kept alive)
         self.genie_dlg = None
+        self.genie_one_dlg = None
 
         # Installation process (QProcess for proper Qt integration)
         self.install_process = None
@@ -156,11 +157,20 @@ class DatabricksConnector:
             parent=self.iface.mainWindow()
         )
 
-        # Create action to open Genie Chat dialog
+        # Create action to open Genie Agent dialog
         self.add_action(
             icon_path,
-            text=self.tr('Databricks Genie Chat'),
+            text=self.tr('Databricks Genie Agent'),
             callback=self.run_genie,
+            add_to_toolbar=True,
+            parent=self.iface.mainWindow()
+        )
+
+        # Create action to open Genie One dialog (workspace-wide questions)
+        self.add_action(
+            os.path.join(self.plugin_dir, 'icons', 'genie_one.svg'),
+            text=self.tr('Databricks Genie One'),
+            callback=self.run_genie_one,
             add_to_toolbar=True,
             parent=self.iface.mainWindow()
         )
@@ -845,7 +855,7 @@ class DatabricksConnector:
             )
 
     def run_genie(self):
-        """Open the Databricks Genie Chat dialog (non-modal)."""
+        """Open the Databricks Genie Agent dialog (non-modal)."""
         from .databricks_genie import GenieDialog
 
         if self.genie_dlg is None:
@@ -854,6 +864,17 @@ class DatabricksConnector:
         self.genie_dlg.show()
         self.genie_dlg.raise_()
         self.genie_dlg.activateWindow()
+
+    def run_genie_one(self):
+        """Open the Databricks Genie One dialog (non-modal)."""
+        from .databricks_genie_one import GenieOneDialog
+
+        if self.genie_one_dlg is None:
+            self.genie_one_dlg = GenieOneDialog(self.iface,
+                                                parent=self.iface.mainWindow())
+        self.genie_one_dlg.show()
+        self.genie_one_dlg.raise_()
+        self.genie_one_dlg.activateWindow()
 
     def run(self):
         """Run method that performs all the real work"""

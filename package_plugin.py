@@ -34,6 +34,8 @@ INCLUDE_FILES = [
     "databricks_provider.py",
     "databricks_live_layer.py",
     "databricks_genie.py",
+    "databricks_genie_one.py",
+    "databricks_genie_charts.py",
 ]
 
 INCLUDE_FOLDERS = [
