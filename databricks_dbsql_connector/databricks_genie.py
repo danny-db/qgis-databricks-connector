@@ -1,12 +1,15 @@
 """
-Databricks Genie Chat — natural-language interface for querying data via the
-Databricks Genie API, with optional geometry visualisation as QGIS layers.
+Databricks Genie Agent — natural-language interface for querying data via the
+Databricks Genie Conversation API (Genie Agents, formerly Genie Spaces), with optional geometry visualisation as QGIS layers.
 
 All Genie-related code lives in this single module, consistent with the
 existing plugin structure (one feature per file).
 """
 import json
+import os
 import re
+import shutil
+import tempfile
 import time
 import urllib.request
 import urllib.error
@@ -22,8 +25,9 @@ from qgis.PyQt.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QComboBox, QTableWidget, QTableWidgetItem,
     QMessageBox, QHeaderView, QTextBrowser, QApplication,
-    QSizePolicy, QAbstractItemView
+    QSizePolicy, QAbstractItemView, QFileDialog
 )
+from qgis.PyQt.QtCore import QUrl
 from qgis.core import (
     QgsVectorLayer, QgsProject, QgsMessageLog, Qgis,
     QgsFeature, QgsFields, QgsField, QgsGeometry,
@@ -36,6 +40,7 @@ from .databricks_auth import (
     connect_kwargs,
     get_bearer_token,
 )
+from .databricks_genie_charts import infer_spec, render_spec
 
 
 # ---------------------------------------------------------------------------
@@ -139,6 +144,27 @@ def _api_request(hostname, path, access_token, method='GET', body=None,
         raise RuntimeError(
             f"HTTP {exc.code}: {exc.reason}\n{err_body}"
         )
+
+
+def _api_request_bytes(hostname, path, access_token, timeout=60):
+    """GET a binary Databricks REST resource (e.g. a chart PNG)."""
+    req = urllib.request.Request(
+        f"https://{hostname}{path}",
+        headers={'Authorization': f'Bearer {access_token}'}, method='GET')
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return resp.read()
+
+
+def auto_chart(columns, rows):
+    """Chart dict inferred from a result Genie didn't visualise, or None."""
+    try:
+        spec = infer_spec(columns, rows)
+        png = render_spec(spec, columns, rows) if spec else None
+    except Exception as exc:  # never let a chart break the answer
+        QgsMessageLog.logMessage(f"Auto chart failed: {exc}",
+                                 "Databricks Connector", Qgis.Warning)
+        png = None
+    return {'title': 'Chart', 'png': png, 'auto': True} if png else None
 
 
 # ---------------------------------------------------------------------------
@@ -274,7 +300,8 @@ class GenieApiThread(QThread):
 
             self.status_update.emit("Sending question to Genie")
             resp = self._api(path, method='POST',
-                             body={'content': self.question}, timeout=60)
+                             body={'content': self.question,
+                                   'enable_visualization': True}, timeout=60)
 
             conversation_id = resp.get('conversation_id',
                                        self.conversation_id or '')
@@ -313,6 +340,31 @@ class GenieApiThread(QThread):
                 columns, rows = self._fetch_query_result(
                     conversation_id, message_id, attachment_id)
 
+            # 5. Charts: Genie's own rendered PNG for each visualisation
+            charts = []
+            for att in attachments:
+                if not att.get('viz'):
+                    continue
+                aid = att.get('attachment_id', att.get('id'))
+                self.status_update.emit("Fetching chart")
+                try:
+                    png = _api_request_bytes(
+                        self.hostname,
+                        f'/api/2.0/genie/spaces/{self.space_id}'
+                        f'/conversations/{conversation_id}/messages/{message_id}'
+                        f'/attachments/{aid}/download-visualization',
+                        self.access_token)
+                    charts.append({'title': att['viz'].get('title', 'Chart'),
+                                   'png': png})
+                except Exception as exc:
+                    QgsMessageLog.logMessage(
+                        f"Genie chart download failed: {exc}",
+                        "Databricks Connector", Qgis.Warning)
+            if not charts and rows:
+                chart = auto_chart(columns, rows)
+                if chart:
+                    charts.append(chart)
+
             self.response_received.emit({
                 'conversation_id': conversation_id,
                 'message_id': message_id,
@@ -320,6 +372,7 @@ class GenieApiThread(QThread):
                 'query_statement': query_statement,
                 'columns': columns,
                 'rows': rows,
+                'charts': charts,
             })
 
         except Exception as exc:
@@ -411,6 +464,11 @@ class GenieDialog(QDialog):
         # Chat history — list of HTML fragments, re-rendered via setHtml()
         self._chat_parts = []
 
+        # Chart images shown in the chat are written to a private temp dir
+        self._chart_dir = tempfile.mkdtemp(prefix="genie_charts_")
+        self._chart_count = 0
+        self._last_chart_path = None
+
         # Thinking animation state
         self._thinking_active = False
         self._thinking_start = 0.0
@@ -425,7 +483,7 @@ class GenieDialog(QDialog):
     # -- UI Setup -----------------------------------------------------------
 
     def _setup_ui(self):
-        self.setWindowTitle("Databricks Genie Chat")
+        self.setWindowTitle("Databricks Genie Agent")
         self.setMinimumSize(720, 560)
         self.resize(800, 620)
 
@@ -439,7 +497,8 @@ class GenieDialog(QDialog):
         self.conn_combo.currentIndexChanged.connect(self._on_connection_changed)
         conn_row.addWidget(self.conn_combo)
 
-        conn_row.addWidget(QLabel("Genie Space:"))
+        self.space_label = QLabel("Genie Agent:")
+        conn_row.addWidget(self.space_label)
         self.space_combo = QComboBox()
         self.space_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         conn_row.addWidget(self.space_combo)
@@ -517,6 +576,13 @@ class GenieDialog(QDialog):
         self.add_layer_btn.clicked.connect(self._on_add_layer)
         bottom_row.addWidget(self.add_layer_btn)
 
+        self.save_chart_btn = QPushButton("Save Chart...")
+        self.save_chart_btn.setAutoDefault(False)
+        self.save_chart_btn.setEnabled(False)
+        self.save_chart_btn.setToolTip("Save the latest chart as a PNG")
+        self.save_chart_btn.clicked.connect(self._on_save_chart)
+        bottom_row.addWidget(self.save_chart_btn)
+
         bottom_row.addStretch()
         self.status_label = QLabel("Status: Ready")
         bottom_row.addWidget(self.status_label)
@@ -580,7 +646,7 @@ class GenieDialog(QDialog):
         self.space_combo.clear()
         self.space_combo.setEnabled(True)
         if not spaces:
-            self.space_combo.addItem("(no spaces found)")
+            self.space_combo.addItem("(no Genie Agents found)")
             return
         for sp in spaces:
             self.space_combo.addItem(sp['title'], sp['id'])
@@ -588,7 +654,7 @@ class GenieDialog(QDialog):
     def _on_spaces_error(self, msg):
         self.space_combo.clear()
         self.space_combo.setEnabled(True)
-        self.space_combo.addItem("(error loading spaces)")
+        self.space_combo.addItem("(error loading Genie Agents)")
         self.status_label.setText(f"Status: {msg}")
         QgsMessageLog.logMessage(
             f"Genie space list error: {msg}",
@@ -679,10 +745,7 @@ class GenieDialog(QDialog):
                                 "Please select a saved connection first.")
             return
 
-        space_id = self.space_combo.currentData()
-        if not space_id:
-            QMessageBox.warning(self, "No Genie Space",
-                                "Please select a Genie Space.")
+        if not self._ready_to_ask():
             return
 
         # Disable controls, switch Ask → Cancel
@@ -707,16 +770,32 @@ class GenieDialog(QDialog):
         self._start_thinking()
 
         # Fire API thread
-        self._api_thread = GenieApiThread(
-            hostname, token, space_id, api_question,
-            conversation_id=self._conversation_id,
-            parent=self,
-            http_path=http_path, auth_method=auth_method,
-        )
+        self._api_thread = self._create_api_thread(
+            hostname, http_path, token, auth_method, api_question)
         self._api_thread.response_received.connect(self._on_response)
         self._api_thread.error_occurred.connect(self._on_api_error)
         self._api_thread.status_update.connect(self._on_api_status)
         self._api_thread.start()
+
+    # Hooks overridden by GenieOneDialog (Genie One needs no Genie Agent).
+
+    def _ready_to_ask(self):
+        """Return True if a Genie Agent is selected (warns the user if not)."""
+        if not self.space_combo.currentData():
+            QMessageBox.warning(self, "No Genie Agent",
+                                "Please select a Genie Agent.")
+            return False
+        return True
+
+    def _create_api_thread(self, hostname, http_path, token, auth_method,
+                           question):
+        """Build the background thread that answers *question*."""
+        return GenieApiThread(
+            hostname, token, self.space_combo.currentData(), question,
+            conversation_id=self._conversation_id,
+            parent=self,
+            http_path=http_path, auth_method=auth_method,
+        )
 
     def _on_api_status(self, text):
         """Update the thinking phase text from the API thread."""
@@ -745,8 +824,8 @@ class GenieDialog(QDialog):
         self._current_rows = rows
         self._current_query = sql_text
 
-        # Append Genie response to chat (text only, SQL in separate panel)
-        self._append_chat_genie(content)
+        # Append Genie response (text + charts) to chat; SQL in separate panel
+        self._append_chat_genie(content, result.get('charts') or [])
 
         # Update collapsible SQL panel
         self._update_sql_panel(sql_text)
@@ -822,9 +901,21 @@ class GenieDialog(QDialog):
             f'<p><b>You:</b> {self._escape_html(text)}</p>')
         self._render_chat()
 
-    def _append_chat_genie(self, content):
+    def _append_chat_genie(self, content, charts=()):
         # Genie response block — grey bg with explicit dark text for dark-mode compat
         body = self._md_to_html(content)
+        # Charts: "[[chart:N]]" markers place them inline (Genie One embeds);
+        # any chart without a marker is shown after the text.
+        placed = set()
+        for n, chart in enumerate(charts):
+            img = self._chart_img_html(chart)
+            marker = f'[[chart:{n}]]'
+            if marker in body:
+                body = body.replace(marker, img)
+                placed.add(n)
+        body = re.sub(r'\[\[chart:\d+\]\]', '', body)
+        body += ''.join(self._chart_img_html(c)
+                        for n, c in enumerate(charts) if n not in placed)
         html = ('<table width="100%" cellpadding="8" cellspacing="0">'
                 '<tr><td bgcolor="#E8E8E8">'
                 '<font color="#1A1A1A">'
@@ -833,6 +924,38 @@ class GenieDialog(QDialog):
                 '</td></tr></table><br/>')
         self._chat_parts.append(html)
         self._render_chat()
+
+    def _chart_img_html(self, chart):
+        """Write a chart PNG to the temp dir and return an <img> for the chat."""
+        if not chart.get('png'):
+            return ''
+        self._chart_count += 1
+        path = os.path.join(self._chart_dir, f"chart_{self._chart_count}.png")
+        with open(path, 'wb') as handle:
+            handle.write(chart['png'])
+        self._last_chart_path = path
+        self.save_chart_btn.setEnabled(True)
+        width = max(320, min(620, self.chat_browser.viewport().width() - 60))
+        note = ('<br/><font color="#777777" size="2"><i>Chart drawn by the '
+                'plugin from the result (Genie returned none).</i></font>'
+                if chart.get('auto') else '')
+        return (f'<br/><img src="{QUrl.fromLocalFile(path).toString()}" '
+                f'width="{width}"/>{note}<br/>')
+
+    def _on_save_chart(self):
+        if not self._last_chart_path:
+            return
+        target, _ = QFileDialog.getSaveFileName(
+            self, "Save Chart", "genie_chart.png", "PNG image (*.png)")
+        if target:
+            self._save_chart_to(target)
+
+    def _save_chart_to(self, target):
+        if not target.lower().endswith('.png'):
+            target += '.png'
+        shutil.copyfile(self._last_chart_path, target)
+        self.status_label.setText(f"Status: Chart saved to {target}")
+        return target
 
     def _append_chat_error(self, msg):
         self._chat_parts.append(
@@ -1101,6 +1224,10 @@ class GenieDialog(QDialog):
         self.results_table.setColumnCount(0)
         self.geom_combo.clear()
         self.add_layer_btn.setEnabled(False)
+        self.save_chart_btn.setEnabled(False)
+        self._last_chart_path = None
+        shutil.rmtree(self._chart_dir, ignore_errors=True)
+        os.makedirs(self._chart_dir, exist_ok=True)
         self._conversation_id = None
         self._current_columns = []
         self._current_rows = []

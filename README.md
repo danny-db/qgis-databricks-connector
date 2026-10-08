@@ -18,6 +18,25 @@ Or install from ZIP: download [`databricks_dbsql_connector.zip`](https://github.
 - [Walkthrough (Mac)](https://www.youtube.com/watch?v=M5ZvVWpZnQY)
 - [Windows installation](https://www.youtube.com/watch?v=zpyWuKZTePQ)
 
+## What's New in v1.5.0
+
+### Genie One (Ask Across Your Whole Workspace)
+- **New Genie One dialog**: `Plugins → Databricks → Databricks Genie One` (or the chat-bubble toolbar icon). Ask in plain English and Genie One finds the right data across the workspace, with no Genie Agent to pick
+- **Live progress**: Genie One's steps (searching tables, running SQL) show while it works; **Cancel** stops the request
+- **Every query, on the map**: Genie One may run several queries per answer. Pick one from the **Result** dropdown, then **Add as Layer** for spatial results
+- **Open in Databricks**: Jump to the same conversation in Genie One in your browser
+- **Works with both auth methods**: Personal Access Token or OAuth sign-in; uses the Genie One MCP server on Unity Gateway (`/ai-gateway/mcp-services/system.ai.genie_one_mcp`)
+
+### Charts in the Chat (Genie Agent + Genie One)
+- **Genie's own visualisations, inline**: When Genie draws a chart, it now appears in the chat just like the Databricks UI
+- **Genie Agent**: shows the exact chart image Genie renders
+- **Genie One**: draws Genie One's chart definition (bar, line, area, scatter, pie; dual axes, stacking, number formats) right where the answer places it
+- **Auto chart**: If Genie returns chart-shaped data without a chart, the plugin draws a simple one (labelled as such)
+- **Save Chart...**: Save the latest chart as a PNG
+
+### Genie Chat is now Genie Agent
+- The Genie Chat dialog is renamed **Databricks Genie Agent** to match Databricks naming (Genie Spaces are now Genie Agents). It works exactly as before
+
 ## What's New in v1.4.0
 
 ### OAuth Authentication (Browser Login / SSO)
@@ -65,7 +84,8 @@ Or install from ZIP: download [`databricks_dbsql_connector.zip`](https://github.
 
 ## Features
 
-- **Genie Chat**: Ask questions in natural language — Genie returns SQL results you can visualise as layers
+- **Genie Agent**: Ask a specific Genie Agent in natural language — Genie returns SQL results you can visualise as layers
+- **Genie One**: Ask questions across the whole workspace — Genie One finds the data, and its query results can be added as layers
 - **Direct Databricks SQL Connection**: Connect directly to Databricks SQL warehouses using a personal access token or OAuth (browser login / SSO)
 - **Spatial Data Support**: Full support for GEOGRAPHY and GEOMETRY data types
 - **Live Layers**: Viewport-based auto-refresh — layers update automatically as you pan and zoom
@@ -188,19 +208,27 @@ The **Auth Method** dropdown lets you pick how the plugin authenticates:
 4. Tables with mixed geometry types automatically create separate live layers (e.g. Point + Polygon)
 5. Toggle all live layers on/off via `Plugins → Databricks → Toggle Live Mode`
 
-#### Method 4: Genie Chat (Natural Language)
-1. Open `Plugins → Databricks → Databricks Genie Chat` (or click the toolbar icon)
-2. Select a saved connection from the dropdown — Genie Spaces load automatically
-3. Choose a Genie Space from the dropdown
+#### Method 4: Genie Agent (Natural Language)
+1. Open `Plugins → Databricks → Databricks Genie Agent` (or click the toolbar icon)
+2. Select a saved connection from the dropdown — Genie Agents load automatically
+3. Choose a Genie Agent from the dropdown
 4. Type a question in plain English (e.g. "Show me all crash locations in Adelaide")
 5. A thinking indicator with elapsed time appears while Genie processes; click **Cancel** to abort
-6. View the response in the chat — Genie's markdown (bold, bullets, etc.) renders automatically
+6. View the response in the chat — Genie's markdown (bold, bullets, etc.) renders automatically, and any chart Genie draws appears inline (**Save Chart...** saves it as PNG)
 7. Click **Show SQL** to reveal the generated query; **Copy SQL** to copy it to clipboard
 8. For spatial results, the geometry column is auto-detected — click **Add as Layer** to visualise on the map
 9. Ask follow-up questions — they continue the same conversation for context
 10. Click **Clear Chat** to reset and start a new conversation
 
-#### Method 5: Custom SQL Queries
+#### Method 5: Genie One (Ask Across the Workspace)
+1. Open `Plugins → Databricks → Databricks Genie One` (or click the chat-bubble toolbar icon)
+2. Select a saved connection (Personal Access Token or OAuth). There is no Genie Agent to choose
+3. Type a question in plain English; Genie One's progress steps appear while it works
+4. Read the answer in the chat, with Genie One's charts drawn inline. Links open in your browser, and **Open in Databricks** continues the conversation in Genie One
+5. If Genie One ran several queries, choose one from the **Result** dropdown to see its rows and SQL
+6. For spatial results, click **Add as Layer**; follow-up questions continue the same conversation
+
+#### Method 6: Custom SQL Queries
 1. Open Custom Query from the dialog or browser
 2. Write your SQL query
 3. Click "Execute Query"
@@ -255,7 +283,9 @@ qgis-databricks-connector/
 │   ├── databricks_browser.py      # Browser panel integration
 │   ├── databricks_provider.py     # Data provider
 │   ├── databricks_live_layer.py   # Live layer viewport auto-refresh
-│   ├── databricks_genie.py       # Genie Chat natural language interface
+│   ├── databricks_genie.py       # Genie Agent natural language interface
+│   ├── databricks_genie_one.py   # Genie One (workspace-wide, via MCP)
+│   ├── databricks_genie_charts.py # Draws Genie chart specs (matplotlib)
 │   └── icons/                     # Plugin icons
 ├── .github/workflows/             # GitHub Actions for releases
 ├── package_plugin.py              # Script to create plugin ZIP

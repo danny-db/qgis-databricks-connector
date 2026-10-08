@@ -3,7 +3,7 @@ name=Databricks DBSQL Connector
 qgisMinimumVersion=3.16
 qgisMaximumVersion=4.99
 description=Connect QGIS to Databricks SQL warehouses and access geospatial data directly from Unity Catalog
-version=1.4.0
+version=1.5.0
 author=Danny Wong
 email=danny.wong@databricks.com
 
@@ -40,7 +40,8 @@ about=A QGIS plugin that provides direct connectivity to Databricks SQL warehous
     - Custom SQL query support with automatic geometry detection
     - Automatic handling of mixed geometry types (creates separate layers)
     - Configurable layer naming with persistent settings
-    - Genie Chat: ask questions about your data in natural language
+    - Genie Agent: ask a Genie Agent questions about your data in natural language
+    - Genie One: ask questions across your whole workspace via the Genie One API
     - Connection management with saved credentials
     - QGIS 3.x and 4.x compatible (Qt5 and Qt6)
 
@@ -55,7 +56,17 @@ about=A QGIS plugin that provides direct connectivity to Databricks SQL warehous
     For installation instructions and documentation, visit the GitHub repository.
 
 # Changelog
-changelog=1.4.0 - OAuth (browser login / SSO) authentication
+changelog=1.5.0 - Genie One + Genie Agent rename
+    - New: Databricks Genie One dialog — ask questions across the whole workspace
+      (no Genie Agent to pick) via the Genie One MCP server on Unity Gateway
+    - New: live progress steps, Cancel, multiple query results, Open in Databricks link
+    - New: Genie One results with geometry can be added as map layers
+    - New: Genie charts shown inline in the chat for Genie Agent (Genie's rendered image)
+      and Genie One (Genie One's chart spec, drawn natively); Save Chart as PNG
+    - New: works with Personal Access Token and OAuth sign-in
+    - Changed: "Databricks Genie Chat" renamed to "Databricks Genie Agent"
+
+    1.4.0 - OAuth (browser login / SSO) authentication
     - New: Auth Method selector — choose Personal Access Token or OAuth (U2M)
     - New: OAuth User-to-Machine browser sign-in; no Personal Access Token required
     - New: "Sign in" button primes the OAuth flow so the browser opens only once
