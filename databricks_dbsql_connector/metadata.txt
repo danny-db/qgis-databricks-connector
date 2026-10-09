@@ -3,7 +3,7 @@ name=Databricks DBSQL Connector
 qgisMinimumVersion=3.16
 qgisMaximumVersion=4.99
 description=Connect QGIS to Databricks SQL warehouses and access geospatial data directly from Unity Catalog
-version=1.6.0
+version=1.6.1
 author=Danny Wong
 email=danny.wong@databricks.com
 
@@ -56,19 +56,28 @@ about=A QGIS plugin that provides direct connectivity to Databricks SQL warehous
     For installation instructions and documentation, visit the GitHub repository.
 
 # Changelog
-changelog=1.6.0 - Save custom SQL queries as project layers (issue #3)
+changelog=1.6.1 - Simpler, more secure project sharing; summary-table layers
+    - Improved: every Databricks layer now links to your saved connection by name, so
+      projects carry only the connection details and are easier to share with your team
+    - Improved: projects from earlier versions are upgraded automatically when opened
+    - Improved: credentials for connections you haven't saved stay in memory for the session
+    - New: Custom Query "Add as Layer" now also creates layers from queries without a
+      geometry column (e.g. summary tables)
+
+    1.6.0 - Save custom SQL queries as project layers (issue #3)
     - New: Custom Query "Save in project" — the query is saved in the .qgz and
       re-queries Databricks when the project opens (like PostGIS SQL layers)
     - New: project layers fetch only the visible map area; select, identify and refresh work
-    - Security: project files store the saved connection name, never an access token
+    - Improved: project layers link to your saved connection by name, so projects are easy to share
     - Fixed: Databricks data provider (GEOMETRY(n)/GEOGRAPHY(n) columns, extent, Multi* types)
 
-    1.5.1 - Security and Qt6 compatibility fixes (QGIS plugin site scans)
-    - Security: identifiers with backticks are now escaped correctly in all SQL
-    - Security: live layer viewport bound as query parameters; https-only API requests
-    - Security: errors that were silently ignored are now logged
-    - Qt6: fully scoped enums throughout (works on QGIS 3 and QGIS 4); compat shim reduced
-    - Tested on QGIS 3.44 (Qt5) and QGIS 4.2.3 (Qt6)
+    1.5.1 - Security hardening and Qt6 readiness
+    - Improved: stronger SQL handling: table and column names of any kind are quoted
+      safely, and live-layer map extents are sent as query parameters
+    - Improved: all Databricks API calls use HTTPS
+    - Improved: clearer diagnostics in the QGIS log
+    - Improved: modern Qt6 code throughout, so one plugin runs natively on QGIS 3 and QGIS 4
+    - Passes the QGIS plugin site security and Qt6 checks; tested on QGIS 3.44 and 4.2.3
 
     1.5.0 - Genie One + Genie Agent rename
     - New: Databricks Genie One dialog — ask questions across the whole workspace

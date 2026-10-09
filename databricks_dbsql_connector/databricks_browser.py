@@ -807,12 +807,9 @@ class DatabricksTableItem(QgsDataCollectionItem):
     def _store_layer_metadata(self, layer, max_features=1000):
         """Store Databricks connection and table metadata on the layer for refresh functionality"""
         try:
-            # Store connection config
-            layer.setCustomProperty("databricks/hostname", self.connection_config.get('hostname', ''))
-            layer.setCustomProperty("databricks/http_path", self.connection_config.get('http_path', ''))
-            layer.setCustomProperty("databricks/access_token", self.connection_config.get('access_token', ''))
-            layer.setCustomProperty("databricks/auth_method",
-                                    normalise_auth_method(self.connection_config.get('auth_method', AUTH_PAT)))
+            # Store connection details (never the token) for re-loading
+            from .databricks_layer_credentials import tag_layer
+            tag_layer(layer, self.connection_config)
 
             # Store table info
             full_name = f"{self.catalog_name}.{self.schema_name}.{self.table_name}"
