@@ -363,7 +363,7 @@ class DatabricksConnector:
             "Databricks Connector - Install Dependencies",
             "The Databricks SQL Connector package is required but not installed.\n\n"
             "Would you like to install it now?\n\n"
-            "This will install: databricks-sql-connector (with Lakehouse Real-Time support)\n\n"
+            "This will install: databricks-sql-connector\n\n"
             "Note: QGIS will need to be restarted after installation.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.Yes
@@ -438,8 +438,7 @@ class DatabricksConnector:
         self.progress_dialog.show()
         QApplication.processEvents()
 
-        # [kernel] adds Lakehouse Real-Time warehouse support (Python 3.10+; pip skips it on older Pythons)
-        pip_args = ['install', '--user', '--no-build-isolation', 'databricks-sql-connector[kernel]']
+        pip_args = ['install', '--user', '--no-build-isolation', 'databricks-sql-connector']
         QgsMessageLog.logMessage(
             f"Running pip install (in-process): {pip_args}",
             "Databricks Connector", Qgis.MessageLevel.Info
@@ -479,7 +478,7 @@ class DatabricksConnector:
                 "You can try manually in the QGIS Python Console:\n\n"
                 "from pip._internal.cli.main_parser import parse_command\n"
                 "from pip._internal.commands import create_command\n"
-                "cmd_name, cmd_args = parse_command(['install', '--user', '--no-build-isolation', 'databricks-sql-connector[kernel]'])\n"
+                "cmd_name, cmd_args = parse_command(['install', '--user', '--no-build-isolation', 'databricks-sql-connector'])\n"
                 "create_command(cmd_name).main(cmd_args)"
             )
 

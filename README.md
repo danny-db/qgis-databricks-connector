@@ -26,7 +26,7 @@ New to the plugin? The **[user guide](docs/README.md)** walks through every feat
 | **Work with tables too big to download** | **Live layers** fetch only what's on screen and refresh as you pan and zoom | [Live layers](docs/05-live-layers.md) |
 | **Map any SQL result and keep it in your project** | **Custom Query** with **Save in project**: the query re-runs against Databricks whenever the project opens, like a PostGIS SQL layer | [Custom queries](docs/06-custom-queries.md) |
 | **Share a project safely** | Layers link to a saved connection by name, so projects carry no tokens; colleagues open them with their own sign-in | [Security and privacy](docs/10-security-and-privacy.md) |
-| **Sign in the way your organisation does** | **OAuth** (browser login / SSO) or a personal access token, on standard and **Lakehouse Real-Time** SQL warehouses | [Connect](docs/02-connect.md) |
+| **Sign in the way your organisation does** | **OAuth** (browser login / SSO) or a personal access token | [Connect](docs/02-connect.md) |
 | **Use the QGIS you have** | One plugin for QGIS 3 (Qt5) and QGIS 4 (Qt6), on Mac and Windows | [Install](docs/01-install.md) |
 
 ## Use cases
@@ -56,15 +56,9 @@ The examples use Victorian road-crash data; swap in your own tables. Each takes 
 1. In the Browser panel, right-click a spatial table → **Add as Live Layer (Viewport)**.
 2. Pan and zoom: only features in view are fetched, so tables with millions of rows stay responsive.
 
-### Map data from a Lakehouse Real-Time warehouse (new in v1.7.0)
-1. Create a connection with the Real-Time warehouse's **HTTP Path**, then **Sign in** or **Test Connection**.
-2. If your plugin was installed before v1.7.0, it offers to add the Databricks SQL kernel that Real-Time warehouses use. Click **Yes**: it takes a few seconds and no restart is needed.
-3. Load tables, run custom queries and use live layers as usual.
-
-## What's new in v1.7.0
+## What's new in v1.7
 
 - **Explain this Map**: one-click map explanations from frontier models on your Databricks workspace (Claude, GPT, Gemini and more), with a model picker, prompt presets, custom prompts, follow-ups and save to Markdown
-- **Lakehouse Real-Time warehouses** are supported
 - **Official Genie icons** for the Genie Agent and Genie One toolbar buttons
 - **Smoother sign-in**: OAuth sessions renew well ahead of expiry
 
@@ -78,7 +72,7 @@ Every release is described in the **[changelog](CHANGELOG.md)**.
 ## Requirements
 
 - **QGIS** 3.16 or later, including QGIS 4 (Qt6). Tested on QGIS 3.42 and 3.44 (Mac and Windows) and QGIS 4.0 and 4.2
-- **Python package** `databricks-sql-connector`, installed by the plugin on first run (with the Databricks SQL kernel for Lakehouse Real-Time warehouses on Python 3.10+). `shapely` and `pyproj` come with QGIS
+- **Python package** `databricks-sql-connector`, installed by the plugin on first run. `shapely` and `pyproj` come with QGIS
 - **Databricks**: access to a SQL warehouse (serverless recommended), and Unity Catalog tables with GEOMETRY or GEOGRAPHY columns. Sign in with OAuth (browser login / SSO) or a personal access token. Explain this Map needs access to an image-capable model on your workspace's Foundation Model APIs
 
 ## Installation
@@ -111,7 +105,7 @@ If automatic dependency installation fails:
 2. Run:
    ```python
    import pip
-   pip.main(['install', 'databricks-sql-connector[kernel]'])
+   pip.main(['install', 'databricks-sql-connector'])
    ```
 3. Restart QGIS
 
@@ -142,7 +136,7 @@ qgis-databricks-connector/
 │   ├── databricks_genie_charts.py    # Draws Genie chart specs (matplotlib)
 │   ├── databricks_ai_core.py         # Foundation Model API calls (Explain this Map)
 │   ├── databricks_map_explain.py     # Explain this Map dialog and map capture
-│   ├── databricks_kernel.py          # Lakehouse Real-Time kernel support
+│   ├── databricks_kernel.py          # Lakehouse Real-Time kernel helper (preview)
 │   └── icons/                        # Plugin icons
 ├── docs/                             # User guide
 ├── .github/workflows/                # GitHub Actions for releases
