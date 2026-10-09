@@ -2,6 +2,12 @@
 
 What changed in each release of the QGIS Databricks DBSQL Connector, newest first. For how to use each feature, see the [user guide](docs/README.md).
 
+## v1.7.1
+
+- **Installer**: installs the standard `databricks-sql-connector` package
+- **Lakehouse Real-Time warehouses**: support is planned for a later release
+- **Docs**: README rewritten around outcomes and use cases, and this changelog
+
 ## v1.7.0
 
 ### Explain this Map (frontier models on Databricks)
@@ -12,9 +18,6 @@ What changed in each release of the QGIS Databricks DBSQL Connector, newest firs
 - **Grounded in your map**: area, scale, layers and what each style encodes are sent with the image, so answers use your real layer and field names
 - **Follow-up questions**, copy, and save as Markdown with the map image
 - **Smoother sign-in**: OAuth sessions renew well ahead of expiry, so long Genie One and Explain this Map sessions run without interruption
-
-### Lakehouse Real-Time warehouses
-- Connect to **Lakehouse Real-Time** SQL warehouses as well as standard ones. The plugin installs the Databricks SQL kernel they use; if you set up the plugin before v1.7.0, it offers a one-click install the first time you connect
 
 ### Official Genie icons
 - The **Genie Agent** and **Genie One** toolbar buttons now use the official Genie icons

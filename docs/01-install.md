@@ -16,7 +16,7 @@
 The plugin needs the `databricks-sql-connector` Python package.
 
 1. The first time the plugin loads without it, QGIS asks: *"The Databricks SQL Connector package is required but not installed. Would you like to install it now?"*
-2. Click **Yes**. The plugin installs it into your user Python packages, including the Databricks SQL kernel used by Lakehouse Real-Time warehouses.
+2. Click **Yes**. The plugin installs it into your user Python packages.
 3. **Restart QGIS** when it says so.
 
 > **Corporate networks:** if the install fails with *"Connection refused"* to `pypi.org`, your network blocks the public Python package index. Ask IT for your organisation's PyPI mirror and add it to your pip config (`~/.config/pip/pip.conf` on macOS/Linux, `%APPDATA%\pip\pip.ini` on Windows):

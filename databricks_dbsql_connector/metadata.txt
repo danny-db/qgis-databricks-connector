@@ -3,7 +3,7 @@ name=Databricks DBSQL Connector
 qgisMinimumVersion=3.16
 qgisMaximumVersion=4.99
 description=Connect QGIS to Databricks SQL warehouses and access geospatial data directly from Unity Catalog
-version=1.7.0
+version=1.7.1
 author=Danny Wong
 email=danny.wong@databricks.com
 
@@ -56,7 +56,12 @@ about=A QGIS plugin that provides direct connectivity to Databricks SQL warehous
     For installation instructions and documentation, visit the GitHub repository.
 
 # Changelog
-changelog=1.7.0 - Explain this Map with frontier models on Databricks
+changelog=1.7.1 - Installer and documentation tidy-up
+    - Improved: the dependency installer uses the standard databricks-sql-connector package
+    - Lakehouse Real-Time warehouse support is planned for a later release
+    - Docs: README use cases and a full CHANGELOG.md
+
+    1.7.0 - Explain this Map with frontier models on Databricks
     - New: Explain this Map: one click sends the current map to a frontier model on your
       Databricks workspace (Foundation Model APIs) and streams back an explanation
     - New: no API key or extra subscription: uses your existing Databricks sign-in
@@ -67,8 +72,6 @@ changelog=1.7.0 - Explain this Map with frontier models on Databricks
       image so answers use your real layer and field names
     - Improved: OAuth sign-ins renew well ahead of expiry, so long Genie One and Explain
       this Map sessions run without interruption
-    - New: Lakehouse Real-Time SQL warehouses are supported; the plugin installs the
-      Databricks SQL kernel they need, or offers a one-click install for existing setups
     - Improved: busy maps (for example with a detailed basemap) are sent as JPEG so they
       always fit the model's image limit
     - Improved: Genie Agent and Genie One toolbar buttons use the official Genie icons

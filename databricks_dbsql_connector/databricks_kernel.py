@@ -5,7 +5,7 @@ databricks-sql-connector uses by default. Connector 4.6+ notices this and
 retries on its Rust "kernel" backend, which ships separately as the optional
 ``databricks-sql-kernel`` package. These helpers recognise the resulting
 error and offer a one-click install, so users who installed the connector
-before v1.7.0 can connect without leaving QGIS.
+before v1.7.0 can connect without leaving QGIS. Preview: full Real-Time support is planned for a later release.
 """
 
 import importlib

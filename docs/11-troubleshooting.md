@@ -19,7 +19,6 @@
 | *"Connection failed"* | Check **Server Hostname** (no `https://`) and **HTTP Path**; make sure the SQL warehouse exists and you can use it. A stopped serverless warehouse starts automatically, so wait a few seconds and try again |
 | Authentication error with a token | The token may be expired or revoked. Generate a new one and save the connection again |
 | **Sign in** doesn't open a browser | QGIS needs a desktop session (it won't work over a headless remote session). Check nothing else is using local port `8020`, which receives the sign-in |
-| *"use_kernel=True requires the optional databricks-sql-kernel extension"* | The warehouse is a **Lakehouse Real-Time** warehouse, which connects through the Databricks SQL kernel. Click **Yes** when the plugin offers to install it, then try again (no restart needed). To install by hand: `pip install --user "databricks-sql-kernel>=1.1.0,<2.0.0"` with the same Python as QGIS (3.10 or later) |
 | Signed in but later connections fail | Delete `databricks_oauth_tokens.json` from your profile folder (**Settings → User Profiles → Open Active Profile Folder**) and click **Sign in** again |
 
 ## Layers
@@ -59,3 +58,4 @@
 |---|---|
 | *"API KEY REQUIRED"* tiles | CARTO now needs a key; use OpenStreetMap or Esri instead (see [Basemaps](09-basemaps-and-styling.md)) |
 | Blank basemap | Your network may block the tile server; try another provider |
+
