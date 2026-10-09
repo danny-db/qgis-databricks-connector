@@ -1,1 +1,1 @@
-databricks-sql-connector>=3.5.0
+databricks-sql-connector[kernel]>=3.5.0

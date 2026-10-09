@@ -16,7 +16,7 @@
 The plugin needs the `databricks-sql-connector` Python package.
 
 1. The first time the plugin loads without it, QGIS asks: *"The Databricks SQL Connector package is required but not installed. Would you like to install it now?"*
-2. Click **Yes**. The plugin installs it into your user Python packages.
+2. Click **Yes**. The plugin installs it into your user Python packages, including the Databricks SQL kernel used by Lakehouse Real-Time warehouses.
 3. **Restart QGIS** when it says so.
 
 > **Corporate networks:** if the install fails with *"Connection refused"* to `pypi.org`, your network blocks the public Python package index. Ask IT for your organisation's PyPI mirror and add it to your pip config (`~/.config/pip/pip.conf` on macOS/Linux, `%APPDATA%\pip\pip.ini` on Windows):
@@ -27,8 +27,10 @@ The plugin needs the `databricks-sql-connector` Python package.
 > Then restart QGIS and accept the install prompt again.
 
 ## Check it worked
-- A **Databricks** icon (and a red chat-bubble **Genie One** icon) appears on the toolbar.
-- **Plugins → Databricks DBSQL Connector** shows *Connect to Databricks SQL*, *Update Layer Data from Databricks*, *Toggle Live Mode for Layer*, *Databricks Genie Agent* and *Databricks Genie One*.
+- Four buttons appear on the toolbar: **Connect to Databricks SQL** (Databricks logo), **Databricks Genie Agent** (the Genie Space icon), **Explain this Map** (a red map with a sparkle) and **Databricks Genie One** (the Genie lamp).
+
+  ![The plugin's toolbar buttons, after QGIS's Python Console](images/07-toolbar.png)
+- **Plugins → Databricks DBSQL Connector** shows *Connect to Databricks SQL*, *Update Layer Data from Databricks*, *Toggle Live Mode for Layer*, *Databricks Genie Agent*, *Explain this Map* and *Databricks Genie One*.
 - The **Browser** panel lists a **Databricks** entry.
 
 ## Update or remove

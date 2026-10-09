@@ -1,10 +1,8 @@
 # QGIS Databricks DBSQL Connector
 
-A QGIS plugin that provides direct connectivity to Databricks SQL warehouses, allowing you to load and display geospatial data from Unity Catalog tables directly in QGIS.
+Put your Databricks data on the map. This QGIS plugin loads spatial tables and SQL results from Unity Catalog straight into QGIS, keeps queries live in your projects, and lets you ask Databricks Genie and frontier models about your data, all with your existing Databricks sign-in.
 
-## 📖 User Guide
-
-Step-by-step guides for every feature are in **[docs/](docs/README.md)**: [install](docs/01-install.md) · [connect with OAuth or a token](docs/02-connect.md) · [load tables](docs/03-load-tables.md) · [Browser panel](docs/04-browser-panel.md) · [live layers](docs/05-live-layers.md) · [custom SQL and saving queries in your project](docs/06-custom-queries.md) · [Genie Agent](docs/07-genie-agent.md) · [Genie One](docs/08-genie-one.md) · [basemaps](docs/09-basemaps-and-styling.md) · [security](docs/10-security-and-privacy.md) · [troubleshooting](docs/11-troubleshooting.md)
+![Explain this Map: a frontier model on Databricks explains a crash-hotspot map](docs/images/06-explain-this-map.png)
 
 ## 📥 Quick Install
 
@@ -15,130 +13,73 @@ Step-by-step guides for every feature are in **[docs/](docs/README.md)**: [insta
 
 Or install from ZIP: download [`databricks_dbsql_connector.zip`](https://github.com/danny-db/qgis-databricks-connector/releases/latest/download/databricks_dbsql_connector.zip) from the [Releases page](https://github.com/danny-db/qgis-databricks-connector/releases).
 
----
+New to the plugin? The **[user guide](docs/README.md)** walks through every feature step by step.
+
+## What you can do
+
+| You want to... | Use | Guide |
+|---|---|---|
+| **Understand a map in seconds**: what it shows, the hotspots and outliers, what to look at next | **Explain this Map**: one click sends the map to a frontier model on your workspace. No API key, no extra subscription | [Explain this Map](docs/12-explain-this-map.md) |
+| **Get an answer without knowing where the data lives** | **Genie One**: ask in plain English across the whole workspace, see its charts, and add the results to the map | [Genie One](docs/08-genie-one.md) |
+| **Ask a curated dataset a question** | **Genie Agent**: ask a specific Genie Agent; see the SQL, results and charts, and map the answer | [Genie Agent](docs/07-genie-agent.md) |
+| **Map a Unity Catalog table** | Discover tables with GEOMETRY or GEOGRAPHY columns, or browse catalogs in the Browser panel, and add them as layers | [Load tables](docs/03-load-tables.md) · [Browser panel](docs/04-browser-panel.md) |
+| **Work with tables too big to download** | **Live layers** fetch only what's on screen and refresh as you pan and zoom | [Live layers](docs/05-live-layers.md) |
+| **Map any SQL result and keep it in your project** | **Custom Query** with **Save in project**: the query re-runs against Databricks whenever the project opens, like a PostGIS SQL layer | [Custom queries](docs/06-custom-queries.md) |
+| **Share a project safely** | Layers link to a saved connection by name, so projects carry no tokens; colleagues open them with their own sign-in | [Security and privacy](docs/10-security-and-privacy.md) |
+| **Sign in the way your organisation does** | **OAuth** (browser login / SSO) or a personal access token, on standard and **Lakehouse Real-Time** SQL warehouses | [Connect](docs/02-connect.md) |
+| **Use the QGIS you have** | One plugin for QGIS 3 (Qt5) and QGIS 4 (Qt6), on Mac and Windows | [Install](docs/01-install.md) |
+
+## Use cases
+
+The examples use Victorian road-crash data; swap in your own tables. Each takes a few minutes.
+
+### Brief a committee from a map (Explain this Map, new in v1.7.0)
+1. Add your layers, style the one that matters (for example **Graduated** on `crashes`, colour ramp *Reds*) and add an OpenStreetMap basemap.
+2. Zoom to the area you're discussing and click **Explain this Map** on the toolbar.
+3. Read the explanation as it streams in: the area, the hotspots, the outliers. It uses your real layer and field names and the class ranges in your legend.
+4. Open **Options → Custom prompt** and ask for your audience, e.g. *"Explain this map for a road safety committee in Victoria, in three bullet points"*.
+5. Switch **Ask for** to **Title, caption and alt text** for the report, then **Save...** to keep the Markdown and the map image together.
+
+### Answer a question you have no table for (Genie One)
+1. Open **Databricks Genie One** (the Genie lamp on the toolbar) and pick your connection.
+2. Ask, e.g. *"Which local government areas had the most fatal crashes in 2024?"*. Genie One finds the data across the workspace and shows its steps while it works.
+3. Read the answer with Genie One's chart in the chat.
+4. If the result has locations, choose it under **Result** and click **Add as Layer**. Then click **Explain this Map** to get a written read of what you've mapped.
+
+### Keep a live analysis in your project and share it (Save in project)
+1. Open **Custom Query**, write the SQL (for example H3 crash hotspots) and **Execute Query**.
+2. Tick **Save in project**, then **Add as Layer**, style it and save the `.qgz`.
+3. Next time anyone opens the project, the layer re-queries Databricks for the visible area, so the map is always current.
+4. Share the project: it holds the SQL and the connection's name, never a token. Colleagues open it with their own OAuth sign-in and their own Unity Catalog permissions.
+
+### Explore a very large table (live layers)
+1. In the Browser panel, right-click a spatial table → **Add as Live Layer (Viewport)**.
+2. Pan and zoom: only features in view are fetched, so tables with millions of rows stay responsive.
+
+### Map data from a Lakehouse Real-Time warehouse (new in v1.7.0)
+1. Create a connection with the Real-Time warehouse's **HTTP Path**, then **Sign in** or **Test Connection**.
+2. If your plugin was installed before v1.7.0, it offers to add the Databricks SQL kernel that Real-Time warehouses use. Click **Yes**: it takes a few seconds and no restart is needed.
+3. Load tables, run custom queries and use live layers as usual.
+
+## What's new in v1.7.0
+
+- **Explain this Map**: one-click map explanations from frontier models on your Databricks workspace (Claude, GPT, Gemini and more), with a model picker, prompt presets, custom prompts, follow-ups and save to Markdown
+- **Lakehouse Real-Time warehouses** are supported
+- **Official Genie icons** for the Genie Agent and Genie One toolbar buttons
+- **Smoother sign-in**: OAuth sessions renew well ahead of expiry
+
+Every release is described in the **[changelog](CHANGELOG.md)**.
 
 ## 📺 Video Tutorials
 
 - [Walkthrough (Mac)](https://www.youtube.com/watch?v=M5ZvVWpZnQY)
 - [Windows installation](https://www.youtube.com/watch?v=zpyWuKZTePQ)
 
-## What's New in v1.6.1
-
-- **Easier, more secure project sharing**: every Databricks layer now links to your saved connection by name, so a project carries only the connection details. Projects from earlier versions are upgraded automatically when you open them
-- **Summary tables as layers**: Custom Query **Add as Layer** now also works for queries without a geometry column
-
-## What's New in v1.6.0
-
-### Save Custom SQL Queries in the Project (issue #3)
-- **Save in project**: In Custom Query, tick **Save in project** before **Add as Layer**. The query is stored in the `.qgz` and re-runs against Databricks every time the project is opened, like a PostGIS SQL layer
-- **Only fetches what you see**: The layer queries Databricks for the visible map area, so large results stay responsive
-- **Easy to share**: the project stores the SQL and the **saved connection's name**, so colleagues open it with their own sign-in. OAuth layers also open for colleagues without the same saved connection
-- **Select, identify and refresh work**: Stable feature ids; *Refresh* re-reads the query
-- **Fixed**: the plugin's Databricks data provider now recognises `GEOMETRY(n)` / `GEOGRAPHY(n)` columns, reads the extent, and handles Multi* geometry types correctly
-
-## What's New in v1.5.1
-
-- **Security hardening**: stronger SQL handling (names of any kind quoted safely, map extents sent as query parameters), HTTPS for every Databricks API call, and clearer diagnostics in the QGIS log. Passes the QGIS plugin site security checks
-- **Qt6 ready**: modern, fully scoped Qt/QGIS code throughout, so the same plugin runs natively on QGIS 3 (Qt5) and QGIS 4 (Qt6)
-
-## What's New in v1.5.0
-
-### Genie One (Ask Across Your Whole Workspace)
-- **New Genie One dialog**: `Plugins → Databricks DBSQL Connector → Databricks Genie One` (or the chat-bubble toolbar icon). Ask in plain English and Genie One finds the right data across the workspace, with no Genie Agent to pick
-- **Live progress**: Genie One's steps (searching tables, running SQL) show while it works; **Cancel** stops the request
-- **Every query, on the map**: Genie One may run several queries per answer. Pick one from the **Result** dropdown, then **Add as Layer** for spatial results
-- **Open in Databricks**: Jump to the same conversation in Genie One in your browser
-- **Works with both auth methods**: Personal Access Token or OAuth sign-in; uses the Genie One MCP server on Unity Gateway (`/ai-gateway/mcp-services/system.ai.genie_one_mcp`)
-
-### Charts in the Chat (Genie Agent + Genie One)
-- **Genie's own visualisations, inline**: When Genie draws a chart, it now appears in the chat just like the Databricks UI
-- **Genie Agent**: shows the exact chart image Genie renders
-- **Genie One**: draws Genie One's chart definition (bar, line, area, scatter, pie; dual axes, stacking, number formats) right where the answer places it
-- **Auto chart**: If Genie returns chart-shaped data without a chart, the plugin draws a simple one (labelled as such)
-- **Save Chart...**: Save the latest chart as a PNG
-
-### Genie Chat is now Genie Agent
-- The Genie Chat dialog is renamed **Databricks Genie Agent** to match Databricks naming (Genie Spaces are now Genie Agents). It works exactly as before
-
-## What's New in v1.4.0
-
-### OAuth Authentication (Browser Login / SSO)
-- **Auth Method selector**: Choose **Personal Access Token** or **OAuth (browser login / SSO)** per connection
-- **No token required for OAuth**: Sign in through your browser (including SSO/identity provider) — the plugin caches and refreshes the session automatically, so the browser opens only once
-- **Sign in button**: Prime the OAuth flow up front before discovering tables or loading layers
-- **Reused everywhere**: The cached OAuth session powers Test Connection, table discovery, layer loads, live-layer refreshes, the Browser panel, and Genie
-- **Secure-by-default storage**: Tokens are written to a permission-restricted file under your QGIS profile directory
-- **Fully backwards compatible**: Existing Personal Access Token connections and saved layers keep working unchanged
-
-## What's New in v1.3.0
-
-### Genie Chat (Natural Language Data Queries)
-- **Databricks Genie Chat**: Ask questions about your data in plain English — Genie translates them to SQL and returns results
-- **Genie Space browser**: Select from available Genie Spaces (auto-populated from your workspace)
-- **Conversation history**: Follow-up questions are sent within the same conversation for context-aware answers
-- **Thinking indicator**: Animated status with elapsed time while Genie processes your question; Cancel button to abort
-- **Smart geometry hints**: Automatically instructs Genie to return geometry as a typed column, improving layer creation success
-- **Results preview**: View query results in a table (up to 100 rows shown, full dataset held in memory)
-- **Add as Layer**: Auto-detect geometry columns and create QGIS memory layers from Genie results
-- **Mixed geometry support**: Creates separate layers per geometry type (Point, LineString, Polygon)
-- **Non-WKT geometry handling**: Automatically re-queries with `ST_ASWKT()` wrapping when needed
-- **Collapsible SQL panel**: Generated SQL hidden by default — click "Show SQL" to reveal, with "Copy SQL" alongside
-- **Markdown rendering**: Genie responses with bold, italic, bullet lists, and code render correctly in the chat
-- **Dark mode compatible**: Explicit text colours ensure readability in both light and dark QGIS themes
-- **Toolbar + menu access**: Click the Databricks icon or use `Plugins → Databricks → Databricks Genie Chat`
-
-### Previous: Live Layers (v1.2.0)
-- **Live Layer mode**: Add spatial layers that automatically refresh as you pan and zoom the map
-- **Viewport-aware queries**: Only fetches features within the current map extent via `ST_INTERSECTS`, enabling work with very large datasets
-- **Mixed geometry support**: Automatically detects geometry types (`SELECT DISTINCT ST_GEOMETRYTYPE`) and creates separate live layers per type (Point, LineString, Polygon) — same behaviour as standard layer loading
-- **Auto-centre on first load**: Map centres on the data automatically so the first refresh always returns results
-- **Smart debounce**: Rapid panning consolidates into a single query (500ms debounce timer)
-- **Extent similarity check**: Small pans (<5% change) are ignored to avoid unnecessary queries
-- **Toggle live mode**: Enable/disable all live layers via Plugins menu or toolbar
-- **Multi-layer support**: Run multiple live layers simultaneously from different tables
-
-### QGIS 4 / Qt6 Compatibility
-- **QGIS 4.0 support**: Full Qt6/PyQt6 compatibility while maintaining QGIS 3.16+ support
-- **Qt6 compat shims**: Portable `_qt6_compat.py` module handles API differences automatically
-- **Fixed**: Plugin load failures caused by removed Qt5 unscoped enums
-- **Fixed**: Dependency installation on QGIS 4 macOS (switched to in-process pip)
-- **Fixed**: Replaced deprecated `exec_()` with `exec()`
-- **Fixed**: Hardcoded `PyQt5` import replaced with portable `qgis.PyQt` abstraction
-
-## Features
-
-- **Genie Agent**: Ask a specific Genie Agent in natural language — Genie returns SQL results you can visualise as layers
-- **Genie One**: Ask questions across the whole workspace — Genie One finds the data, and its query results can be added as layers
-- **Direct Databricks SQL Connection**: Connect directly to Databricks SQL warehouses using a personal access token or OAuth (browser login / SSO)
-- **Spatial Data Support**: Full support for GEOGRAPHY and GEOMETRY data types
-- **Live Layers**: Viewport-based auto-refresh — layers update automatically as you pan and zoom
-- **Multiple Access Methods**: Load data via Dialog, Browser Panel, or Custom Query interface
-- **Browser Panel Integration**: Browse catalogs, schemas, and tables directly in QGIS Browser
-- **Custom SQL Query Support**: Execute any SQL query and add results as layers
-- **Table Discovery**: Automatically discover tables with spatial columns in your Unity Catalog
-- **Memory Layer Creation**: Load spatial data as QGIS memory layers with full attribute support
-- **Connection Management**: Save and manage multiple Databricks connections
-- **Mixed Geometry Handling**: Automatically creates separate layers for different geometry types
-- **Configurable Layer Naming**: Set custom layer name prefix
-- **Flexible Feature Limits**: Load all records or limit to specific count
-- **Layer Data Refresh**: Update existing layers with fresh data from Databricks
-- **QGIS 3.x and 4.x Compatible**: Works across QGIS 3.16+ through QGIS 4.x (Qt5 and Qt6)
-
 ## Requirements
 
-### QGIS Version
-- Tested on QGIS 3.42.1, 3.44.1, 3.44.5 (Mac and Windows), and QGIS 4.0 (Qt6)
-- Supports QGIS 3.16+ through 4.x
-
-### Python Dependencies
-- **`databricks-sql-connector`** - Required (installed automatically by the plugin)
-
-> **Note**: `shapely` and `pyproj` are already bundled with QGIS - no additional installation needed.
-
-### Databricks Requirements
-- Databricks SQL Warehouse access (Serverless recommended for best performance)
-- Authentication: a Personal Access Token, or OAuth (browser login / SSO) — no token needed for OAuth
-- Unity Catalog tables with GEOGRAPHY or GEOMETRY columns
+- **QGIS** 3.16 or later, including QGIS 4 (Qt6). Tested on QGIS 3.42 and 3.44 (Mac and Windows) and QGIS 4.0 and 4.2
+- **Python package** `databricks-sql-connector`, installed by the plugin on first run (with the Databricks SQL kernel for Lakehouse Real-Time warehouses on Python 3.10+). `shapely` and `pyproj` come with QGIS
+- **Databricks**: access to a SQL warehouse (serverless recommended), and Unity Catalog tables with GEOMETRY or GEOGRAPHY columns. Sign in with OAuth (browser login / SSO) or a personal access token. Explain this Map needs access to an image-capable model on your workspace's Foundation Model APIs
 
 ## Installation
 
@@ -170,155 +111,45 @@ If automatic dependency installation fails:
 2. Run:
    ```python
    import pip
-   pip.main(['install', 'databricks-sql-connector'])
+   pip.main(['install', 'databricks-sql-connector[kernel]'])
    ```
 3. Restart QGIS
 
-## Usage
+## Help
 
-### Setting Up a Connection
-
-1. **Open the plugin** by clicking the Databricks icon in the toolbar
-
-2. **Enter connection details**:
-   - **Connection Name**: A friendly name for saving this connection
-   - **Server Hostname**: Your Databricks workspace hostname (e.g., `your-workspace.cloud.databricks.com`)
-   - **HTTP Path**: The SQL warehouse HTTP path (e.g., `/sql/1.0/warehouses/your-warehouse-id`)
-   - **Auth Method**: Choose how to authenticate (see below)
-   - **Access Token**: *(Personal Access Token only)* Your Databricks token (starts with `dapi`)
-
-3. **Test the connection** by clicking "Test Connection"
-
-4. **Save the connection** to persist settings
-
-#### Authentication methods
-
-The **Auth Method** dropdown lets you pick how the plugin authenticates:
-
-- **Personal Access Token (PAT)** — paste a token that starts with `dapi`. Simplest option;
-  the token is stored with the saved connection.
-- **OAuth (browser login / SSO)** — no token needed. The first connection (or clicking
-  **Sign in**) opens your browser to authenticate against your Databricks workspace, including
-  any SSO/identity provider. The plugin caches the resulting tokens in a
-  permission-restricted file under your QGIS profile directory and refreshes them automatically,
-  so the browser only opens once. The same cached session is reused for Test Connection,
-  table discovery, layer loads, live-layer refreshes, the Browser panel, and Genie.
-
-> **Tip:** With OAuth selected, use **Sign in** once before discovering tables so the browser
-> sign-in happens up front rather than mid-operation.
-
-### Loading Data
-
-#### Method 1: Table Discovery (Dialog)
-1. Click "Discover Tables" after connecting
-2. Select tables to load
-3. Click "Add Selected Layers"
-
-#### Method 2: Browser Panel
-1. Open Browser Panel (`View → Panels → Browser`)
-2. Expand `Databricks` → Your Connection → Catalog → Schema
-3. Right-click a table:
-   - **Add First 1000 Features**: Quick preview
-   - **Add All Features**: Load complete dataset
-   - **Add as Live Layer (Viewport)**: Load with auto-refresh on pan/zoom
-   - **View Data...**: Open custom query dialog
-
-#### Method 3: Live Layers
-1. Right-click a spatial table in Browser → **Add as Live Layer (Viewport)**
-   - Or: Use the Dialog with "Live Mode" checkbox enabled
-2. The map auto-centres on the data and begins loading features in the viewport
-3. Pan and zoom the map — the layer auto-refreshes with features in the current extent
-4. Tables with mixed geometry types automatically create separate live layers (e.g. Point + Polygon)
-5. Toggle all live layers on/off via `Plugins → Databricks DBSQL Connector → Toggle Live Mode for Layer`
-
-#### Method 4: Genie Agent (Natural Language)
-1. Open `Plugins → Databricks DBSQL Connector → Databricks Genie Agent` (or click the toolbar icon)
-2. Select a saved connection from the dropdown — Genie Agents load automatically
-3. Choose a Genie Agent from the dropdown
-4. Type a question in plain English (e.g. "Show me all crash locations in Adelaide")
-5. A thinking indicator with elapsed time appears while Genie processes; click **Cancel** to abort
-6. View the response in the chat — Genie's markdown (bold, bullets, etc.) renders automatically, and any chart Genie draws appears inline (**Save Chart...** saves it as PNG)
-7. Click **Show SQL** to reveal the generated query; **Copy SQL** to copy it to clipboard
-8. For spatial results, the geometry column is auto-detected — click **Add as Layer** to visualise on the map
-9. Ask follow-up questions — they continue the same conversation for context
-10. Click **Clear Chat** to reset and start a new conversation
-
-#### Method 5: Genie One (Ask Across the Workspace)
-1. Open `Plugins → Databricks DBSQL Connector → Databricks Genie One` (or click the chat-bubble toolbar icon)
-2. Select a saved connection (Personal Access Token or OAuth). There is no Genie Agent to choose
-3. Type a question in plain English; Genie One's progress steps appear while it works
-4. Read the answer in the chat, with Genie One's charts drawn inline. Links open in your browser, and **Open in Databricks** continues the conversation in Genie One
-5. If Genie One ran several queries, choose one from the **Result** dropdown to see its rows and SQL
-6. For spatial results, click **Add as Layer**; follow-up questions continue the same conversation
-
-#### Method 6: Custom SQL Queries
-1. Open Custom Query from the dialog or browser
-2. Write your SQL query
-3. Click "Execute Query"
-4. Click "Add as Layer"
-5. To keep the layer in your project, tick **Save in project** before clicking **Add as Layer**:
-   - The project saves the SQL and the saved connection's name (no token). Save the project to keep the layer
-   - When the project is reopened, the layer re-queries Databricks for the visible map area
-   - Personal Access Token connections must be saved first (so the token stays in your QGIS settings); OAuth works either way
-   - Only a single `SELECT` (or `WITH … SELECT`) query can be saved
-
-## Supported Geometry Types
-
-- Point / MultiPoint
-- LineString / MultiLineString
-- Polygon / MultiPolygon
-- Mixed Geometry Tables (automatically split into separate layers)
-
-## Troubleshooting
-
-### "Connection failed"
-- Verify hostname and HTTP path (and access token if using Personal Access Token auth)
-- Check network connectivity to Databricks
-- Ensure the SQL warehouse is running
-
-### OAuth sign-in issues
-- The browser must be able to open and redirect to `http://localhost:<port>` — if no browser
-  appears, check that QGIS is not running in a headless/remote session
-- If sign-in succeeds but later connections fail, delete the cached token file
-  (`databricks_oauth_tokens.json` in your QGIS profile directory) and click **Sign in** again
-- OAuth (browser login) requires an interactive desktop session; for unattended/headless use,
-  use a Personal Access Token instead
-
-### "No spatial tables found"
-- Verify Unity Catalog access permissions
-- Check that tables have GEOMETRY or GEOGRAPHY columns
-- Check QGIS Log Messages (`View → Panels → Log Messages → Databricks Connector`)
-
-### Dependency Installation Issues
-If automatic installation fails, try manual installation via Python Console (see above).
-
-### Debug Logging
-- Go to `View → Panels → Log Messages`
-- Select "Databricks Connector" for detailed logs
+- **How-to guides** for every feature: [user guide](docs/README.md)
+- **Something not working?** See [troubleshooting](docs/11-troubleshooting.md), and check `View → Panels → Log Messages → Databricks Connector`
+- **Supported geometry**: Point, LineString, Polygon and their Multi* types; mixed-geometry tables are split into one layer per type
 
 ## Repository Structure
 
 ```
 qgis-databricks-connector/
-├── databricks_dbsql_connector/    # Plugin folder
-│   ├── __init__.py                # Plugin entry point
-│   ├── _qt6_compat.py             # Qt5/Qt6 compatibility shims
-│   ├── databricks_auth.py         # Central auth factory + OAuth token persistence
-│   ├── metadata.txt               # Plugin metadata
-│   ├── LICENSE                    # MIT License
-│   ├── databricks_connector.py    # Main plugin class
-│   ├── databricks_dialog.py       # Connection dialog and query UI
-│   ├── databricks_browser.py      # Browser panel integration
-│   ├── databricks_provider.py     # Data provider
-│   ├── databricks_live_layer.py   # Live layer viewport auto-refresh
-│   ├── databricks_genie.py       # Genie Agent natural language interface
-│   ├── databricks_genie_one.py   # Genie One (workspace-wide, via MCP)
-│   ├── databricks_genie_charts.py # Draws Genie chart specs (matplotlib)
-│   └── icons/                     # Plugin icons
-├── .github/workflows/             # GitHub Actions for releases
-├── package_plugin.py              # Script to create plugin ZIP
-├── README.md                      # This file
-└── LICENSE                        # MIT License
+├── databricks_dbsql_connector/       # Plugin folder
+│   ├── __init__.py                   # Plugin entry point
+│   ├── _qt6_compat.py                # Qt5/Qt6 compatibility shims
+│   ├── databricks_auth.py            # Central auth factory + OAuth token persistence
+│   ├── metadata.txt                  # Plugin metadata
+│   ├── LICENSE                       # MIT License
+│   ├── databricks_connector.py       # Main plugin class
+│   ├── databricks_dialog.py          # Connection dialog and query UI
+│   ├── databricks_browser.py         # Browser panel integration
+│   ├── databricks_provider.py        # Data provider (layers saved in projects)
+│   ├── databricks_layer_credentials.py # Links layers to saved connections
+│   ├── databricks_live_layer.py      # Live layer viewport auto-refresh
+│   ├── databricks_genie.py           # Genie Agent natural language interface
+│   ├── databricks_genie_one.py       # Genie One (workspace-wide, via MCP)
+│   ├── databricks_genie_charts.py    # Draws Genie chart specs (matplotlib)
+│   ├── databricks_ai_core.py         # Foundation Model API calls (Explain this Map)
+│   ├── databricks_map_explain.py     # Explain this Map dialog and map capture
+│   ├── databricks_kernel.py          # Lakehouse Real-Time kernel support
+│   └── icons/                        # Plugin icons
+├── docs/                             # User guide
+├── .github/workflows/                # GitHub Actions for releases
+├── package_plugin.py                 # Script to create plugin ZIP
+├── CHANGELOG.md                      # Release notes
+├── README.md                         # This file
+└── LICENSE                           # MIT License
 ```
 
 ## For Developers

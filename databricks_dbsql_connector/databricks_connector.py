@@ -159,9 +159,18 @@ class DatabricksConnector:
 
         # Create action to open Genie Agent dialog
         self.add_action(
-            icon_path,
+            os.path.join(self.plugin_dir, 'icons', 'genie_agent.svg'),
             text=self.tr('Databricks Genie Agent'),
             callback=self.run_genie,
+            add_to_toolbar=True,
+            parent=self.iface.mainWindow()
+        )
+
+        # Explain this Map: one click sends the map to a frontier model on Databricks
+        self.add_action(
+            os.path.join(self.plugin_dir, 'icons', 'explain_map.svg'),
+            text=self.tr('Explain this Map'),
+            callback=self.run_explain_map,
             add_to_toolbar=True,
             parent=self.iface.mainWindow()
         )
@@ -354,7 +363,7 @@ class DatabricksConnector:
             "Databricks Connector - Install Dependencies",
             "The Databricks SQL Connector package is required but not installed.\n\n"
             "Would you like to install it now?\n\n"
-            "This will install: databricks-sql-connector\n\n"
+            "This will install: databricks-sql-connector (with Lakehouse Real-Time support)\n\n"
             "Note: QGIS will need to be restarted after installation.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.Yes
@@ -429,7 +438,8 @@ class DatabricksConnector:
         self.progress_dialog.show()
         QApplication.processEvents()
 
-        pip_args = ['install', '--user', '--no-build-isolation', 'databricks-sql-connector']
+        # [kernel] adds Lakehouse Real-Time warehouse support (Python 3.10+; pip skips it on older Pythons)
+        pip_args = ['install', '--user', '--no-build-isolation', 'databricks-sql-connector[kernel]']
         QgsMessageLog.logMessage(
             f"Running pip install (in-process): {pip_args}",
             "Databricks Connector", Qgis.MessageLevel.Info
@@ -469,7 +479,7 @@ class DatabricksConnector:
                 "You can try manually in the QGIS Python Console:\n\n"
                 "from pip._internal.cli.main_parser import parse_command\n"
                 "from pip._internal.commands import create_command\n"
-                "cmd_name, cmd_args = parse_command(['install', '--user', '--no-build-isolation', 'databricks-sql-connector'])\n"
+                "cmd_name, cmd_args = parse_command(['install', '--user', '--no-build-isolation', 'databricks-sql-connector[kernel]'])\n"
                 "create_command(cmd_name).main(cmd_args)"
             )
 
@@ -873,6 +883,24 @@ class DatabricksConnector:
         self.genie_dlg.show()
         self.genie_dlg.raise_()
         self.genie_dlg.activateWindow()
+
+    def run_explain_map(self):
+        """Explain this Map: capture the map and explain it in one click."""
+        from .databricks_map_explain import ExplainMapDialog, saved_connection_names
+
+        if not saved_connection_names():
+            QMessageBox.information(
+                self.iface.mainWindow(), "Explain this Map",
+                "Explain this Map uses a saved Databricks connection.\n\n"
+                "Set one up now: enter your workspace details, sign in, and click Save Connection.")
+            self.run()
+            return
+        if getattr(self, "explain_dlg", None) is None:
+            self.explain_dlg = ExplainMapDialog(self.iface, parent=self.iface.mainWindow())
+        self.explain_dlg.show()
+        self.explain_dlg.raise_()
+        self.explain_dlg.activateWindow()
+        self.explain_dlg.explain()
 
     def run_genie_one(self):
         """Open the Databricks Genie One dialog (non-modal)."""

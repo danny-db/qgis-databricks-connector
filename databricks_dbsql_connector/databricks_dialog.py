@@ -27,6 +27,7 @@ try:
 except ImportError:
     DATABRICKS_AVAILABLE = False
 
+from .databricks_kernel import offer_kernel_install
 from .databricks_auth import (
     AUTH_PAT,
     AUTH_OAUTH_U2M,
@@ -1163,7 +1164,8 @@ class DatabricksDialog(QDialog):
             QMessageBox.information(self, "Databricks Sign-in", message)
             self.discover_tables_btn.setEnabled(True)
         else:
-            QMessageBox.critical(self, "Databricks Sign-in Failed", message)
+            if not offer_kernel_install(self, message):
+                QMessageBox.critical(self, "Databricks Sign-in Failed", message)
 
     def save_current_connection(self):
         """Save current connection details"""
@@ -1333,7 +1335,8 @@ import sys
             QMessageBox.information(self, "Connection Test", message)
             self.discover_tables_btn.setEnabled(True)
         else:
-            QMessageBox.critical(self, "Connection Test Failed", message)
+            if not offer_kernel_install(self, message):
+                QMessageBox.critical(self, "Connection Test Failed", message)
     
     def discover_tables(self):
         """Discover spatial tables in the database"""
@@ -3045,7 +3048,8 @@ class DatabricksQueryDialog(QDialog):
             self.results_info.setText(f"Query failed: {message}")
             self.add_layer_btn.setEnabled(False)
             
-            QMessageBox.critical(self, "Query Error", message)
+            if not offer_kernel_install(self, message):
+                QMessageBox.critical(self, "Query Error", message)
     
     def display_results(self, columns, rows):
         """Display query results in the table"""
@@ -3179,7 +3183,8 @@ class DatabricksQueryDialog(QDialog):
             QMessageBox.information(self, "Layer Added", 
                                   f"Layer '{layer.name()}' added successfully with {layer.featureCount()} features.")
         else:
-            QMessageBox.critical(self, "Layer Creation Failed", message)
+            if not offer_kernel_install(self, message):
+                QMessageBox.critical(self, "Layer Creation Failed", message)
     
     def refresh_database_structure(self):
         """Refresh the database structure tree"""

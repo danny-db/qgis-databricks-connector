@@ -1,6 +1,6 @@
 # 11. Troubleshooting
 
-[← Security and privacy](10-security-and-privacy.md) · [User guide](README.md)
+[← Security and privacy](10-security-and-privacy.md) · [User guide](README.md) · Next: [Explain this Map →](12-explain-this-map.md)
 
 ## Find the logs first
 **View → Panels → Log Messages**, then the **Databricks Connector**, **Databricks Provider** and **Query Dialog** tabs. Include this text when you [report an issue](https://github.com/danny-db/qgis-databricks-connector/issues).
@@ -19,6 +19,7 @@
 | *"Connection failed"* | Check **Server Hostname** (no `https://`) and **HTTP Path**; make sure the SQL warehouse exists and you can use it. A stopped serverless warehouse starts automatically, so wait a few seconds and try again |
 | Authentication error with a token | The token may be expired or revoked. Generate a new one and save the connection again |
 | **Sign in** doesn't open a browser | QGIS needs a desktop session (it won't work over a headless remote session). Check nothing else is using local port `8020`, which receives the sign-in |
+| *"use_kernel=True requires the optional databricks-sql-kernel extension"* | The warehouse is a **Lakehouse Real-Time** warehouse, which connects through the Databricks SQL kernel. Click **Yes** when the plugin offers to install it, then try again (no restart needed). To install by hand: `pip install --user "databricks-sql-kernel>=1.1.0,<2.0.0"` with the same Python as QGIS (3.10 or later) |
 | Signed in but later connections fail | Delete `databricks_oauth_tokens.json` from your profile folder (**Settings → User Profiles → Open Active Profile Folder**) and click **Sign in** again |
 
 ## Layers
@@ -41,6 +42,16 @@
 | *"authentication failed (401/403)"* | Sign in again (OAuth) or check your token; your account also needs access to Genie |
 | *"Rate limited (429)"* or a temporary request limit | The workspace is busy. Genie One retries automatically; for Genie Agent, wait a moment and ask again |
 | No chart shown | Genie decided a chart doesn't help; ask explicitly, e.g. *"…as a bar chart"*. Charts also need matplotlib, which is bundled with most QGIS installs |
+
+## Explain this Map
+
+| Symptom | Fix |
+|---|---|
+| *"This model can't read images"* | Pick another model in **Model**; only image-capable models are listed, but older saved choices may not be |
+| *"That model isn't available on this workspace"* | Pick another model. Availability depends on your workspace and region |
+| *"The workspace is busy (rate limited)"* | The plugin retries automatically; if it persists, wait a moment and click **Explain** again |
+| The explanation misreads the legend | Keep **Options → Include layer and style details** ticked, and use a graduated or categorised style with clear classes |
+| *"Save a Databricks connection first"* | Explain this Map uses a [saved connection](02-connect.md); save one in the main dialog |
 
 ## Basemaps
 

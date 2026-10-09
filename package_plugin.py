@@ -37,6 +37,9 @@ INCLUDE_FILES = [
     "databricks_genie_one.py",
     "databricks_genie_charts.py",
     "databricks_layer_credentials.py",
+    "databricks_ai_core.py",
+    "databricks_map_explain.py",
+    "databricks_kernel.py",
 ]
 
 INCLUDE_FOLDERS = [

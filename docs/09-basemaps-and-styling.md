@@ -24,6 +24,8 @@ If **OpenStreetMap** isn't listed, or you want another basemap, right-click **XY
 ## Style a layer
 Right-click a layer → **Properties… → Symbology**.
 
+![Crash hotspots styled Graduated on `crashes` with the Reds colour ramp, over OpenStreetMap](images/04-map-h3-hotspots.jpg)
+
 **Heat map of counts** (e.g. the H3 hotspot query in [Custom SQL queries](06-custom-queries.md#example-queries)):
 1. Change **Single Symbol** to **Graduated**.
 2. **Value:** `crashes`. **Color ramp:** *Reds*. **Mode:** *Quantile*. **Classes:** 6.

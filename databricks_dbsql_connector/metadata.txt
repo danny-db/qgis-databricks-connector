@@ -3,7 +3,7 @@ name=Databricks DBSQL Connector
 qgisMinimumVersion=3.16
 qgisMaximumVersion=4.99
 description=Connect QGIS to Databricks SQL warehouses and access geospatial data directly from Unity Catalog
-version=1.6.1
+version=1.7.0
 author=Danny Wong
 email=danny.wong@databricks.com
 
@@ -56,7 +56,24 @@ about=A QGIS plugin that provides direct connectivity to Databricks SQL warehous
     For installation instructions and documentation, visit the GitHub repository.
 
 # Changelog
-changelog=1.6.1 - Simpler, more secure project sharing; summary-table layers
+changelog=1.7.0 - Explain this Map with frontier models on Databricks
+    - New: Explain this Map: one click sends the current map to a frontier model on your
+      Databricks workspace (Foundation Model APIs) and streams back an explanation
+    - New: no API key or extra subscription: uses your existing Databricks sign-in
+    - New: model picker (image-capable models on your workspace), prompt presets (explain,
+      report summary, patterns, caption and alt text, next steps) and custom prompts
+    - New: follow-up questions, copy, and save as Markdown with the map image
+    - The map's facts (area, scale, layers and what each style encodes) are sent with the
+      image so answers use your real layer and field names
+    - Improved: OAuth sign-ins renew well ahead of expiry, so long Genie One and Explain
+      this Map sessions run without interruption
+    - New: Lakehouse Real-Time SQL warehouses are supported; the plugin installs the
+      Databricks SQL kernel they need, or offers a one-click install for existing setups
+    - Improved: busy maps (for example with a detailed basemap) are sent as JPEG so they
+      always fit the model's image limit
+    - Improved: Genie Agent and Genie One toolbar buttons use the official Genie icons
+
+    1.6.1 - Simpler, more secure project sharing; summary-table layers
     - Improved: every Databricks layer now links to your saved connection by name, so
       projects carry only the connection details and are easier to share with your team
     - Improved: projects from earlier versions are upgraded automatically when opened

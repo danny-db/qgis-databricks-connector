@@ -14,6 +14,8 @@ The main dialog finds every table you can access that has a `GEOMETRY` or `GEOGR
    - **Live Mode (auto-refresh on viewport change):** tick to load only what's on screen. See [Live layers](05-live-layers.md).
 5. Click **Add Selected Layers**.
 
+![Discover Tables lists each spatial table with its geometry column and type](images/08-discover-tables.png)
+
 Each table becomes a layer in the **Layers** panel. To zoom to it, right-click the layer → **Zoom to Layer(s)**.
 
 ## Good to know
