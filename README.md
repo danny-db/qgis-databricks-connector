@@ -2,6 +2,10 @@
 
 A QGIS plugin that provides direct connectivity to Databricks SQL warehouses, allowing you to load and display geospatial data from Unity Catalog tables directly in QGIS.
 
+## 📖 User Guide
+
+Step-by-step guides for every feature are in **[docs/](docs/README.md)**: [install](docs/01-install.md) · [connect with OAuth or a token](docs/02-connect.md) · [load tables](docs/03-load-tables.md) · [Browser panel](docs/04-browser-panel.md) · [live layers](docs/05-live-layers.md) · [custom SQL and saving queries in your project](docs/06-custom-queries.md) · [Genie Agent](docs/07-genie-agent.md) · [Genie One](docs/08-genie-one.md) · [basemaps](docs/09-basemaps-and-styling.md) · [security](docs/10-security-and-privacy.md) · [troubleshooting](docs/11-troubleshooting.md)
+
 ## 📥 Quick Install
 
 1. In QGIS: `Plugins → Manage and Install Plugins`
@@ -35,7 +39,7 @@ Or install from ZIP: download [`databricks_dbsql_connector.zip`](https://github.
 ## What's New in v1.5.0
 
 ### Genie One (Ask Across Your Whole Workspace)
-- **New Genie One dialog**: `Plugins → Databricks → Databricks Genie One` (or the chat-bubble toolbar icon). Ask in plain English and Genie One finds the right data across the workspace, with no Genie Agent to pick
+- **New Genie One dialog**: `Plugins → Databricks DBSQL Connector → Databricks Genie One` (or the chat-bubble toolbar icon). Ask in plain English and Genie One finds the right data across the workspace, with no Genie Agent to pick
 - **Live progress**: Genie One's steps (searching tables, running SQL) show while it works; **Cancel** stops the request
 - **Every query, on the map**: Genie One may run several queries per answer. Pick one from the **Result** dropdown, then **Add as Layer** for spatial results
 - **Open in Databricks**: Jump to the same conversation in Genie One in your browser
@@ -220,10 +224,10 @@ The **Auth Method** dropdown lets you pick how the plugin authenticates:
 2. The map auto-centres on the data and begins loading features in the viewport
 3. Pan and zoom the map — the layer auto-refreshes with features in the current extent
 4. Tables with mixed geometry types automatically create separate live layers (e.g. Point + Polygon)
-5. Toggle all live layers on/off via `Plugins → Databricks → Toggle Live Mode`
+5. Toggle all live layers on/off via `Plugins → Databricks DBSQL Connector → Toggle Live Mode for Layer`
 
 #### Method 4: Genie Agent (Natural Language)
-1. Open `Plugins → Databricks → Databricks Genie Agent` (or click the toolbar icon)
+1. Open `Plugins → Databricks DBSQL Connector → Databricks Genie Agent` (or click the toolbar icon)
 2. Select a saved connection from the dropdown — Genie Agents load automatically
 3. Choose a Genie Agent from the dropdown
 4. Type a question in plain English (e.g. "Show me all crash locations in Adelaide")
@@ -235,7 +239,7 @@ The **Auth Method** dropdown lets you pick how the plugin authenticates:
 10. Click **Clear Chat** to reset and start a new conversation
 
 #### Method 5: Genie One (Ask Across the Workspace)
-1. Open `Plugins → Databricks → Databricks Genie One` (or click the chat-bubble toolbar icon)
+1. Open `Plugins → Databricks DBSQL Connector → Databricks Genie One` (or click the chat-bubble toolbar icon)
 2. Select a saved connection (Personal Access Token or OAuth). There is no Genie Agent to choose
 3. Type a question in plain English; Genie One's progress steps appear while it works
 4. Read the answer in the chat, with Genie One's charts drawn inline. Links open in your browser, and **Open in Databricks** continues the conversation in Genie One
