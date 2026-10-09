@@ -49,8 +49,9 @@ _OAUTH_REDIRECT_PORT = 8020
 _OAUTH_SCOPES = ["all-apis", "offline_access"]
 
 # Refresh the bearer token this many seconds before it actually expires, so a
-# request never goes out with a token that lapses mid-flight.
-_TOKEN_EXPIRY_MARGIN_SECONDS = 120
+# multi-step operation (a Genie One conversation, a streamed model answer)
+# never runs out of token part-way through.
+_TOKEN_EXPIRY_MARGIN_SECONDS = 600
 
 _persistence_lock = threading.Lock()
 
@@ -274,6 +275,41 @@ def _jwt_seconds_until_expiry(token):
         return None
 
 
+def _refresh_access_token(hostname, persistence, refresh_token):
+    """Exchange the cached refresh token for a new access token now, via the
+    workspace's OAuth token endpoint, and persist the new pair. Returns the
+    access token, or None (the caller then falls back to a connector refresh)."""
+    host = (hostname or "").strip()
+    host = host[len("https://"):] if host.startswith("https://") else host
+    host = host.rstrip("/")
+    if not host or any(c in host for c in "/@?#"):
+        return None
+    try:
+        import urllib.parse
+        import urllib.request
+        from databricks.sql.experimental.oauth_persistence import OAuthToken
+
+        body = urllib.parse.urlencode({
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token,
+            "client_id": _OAUTH_CLIENT_ID,
+        }).encode("utf-8")
+        request = urllib.request.Request(
+            f"https://{host}/oidc/v1/token", data=body,
+            headers={"Content-Type": "application/x-www-form-urlencoded"}, method="POST")
+        with urllib.request.urlopen(request, timeout=30) as resp:  # nosec B310 - fixed https URL on the workspace host
+            data = json.loads(resp.read().decode("utf-8"))
+        access = data.get("access_token")
+        if not access:
+            return None
+        persistence.persist(_cache_key(hostname),
+                            OAuthToken(access, data.get("refresh_token") or refresh_token))
+        return access
+    except Exception as exc:
+        logger.info("Early OAuth refresh failed, falling back to the connector: %s", exc)
+        return None
+
+
 def get_bearer_token(hostname, http_path, access_token=None, auth_method=AUTH_PAT):
     """Return a bearer token for Databricks REST calls (used by Genie).
 
@@ -294,6 +330,12 @@ def get_bearer_token(hostname, http_path, access_token=None, auth_method=AUTH_PA
         token is None
         or (seconds_left is not None and seconds_left < _TOKEN_EXPIRY_MARGIN_SECONDS)
     )
+    if needs_refresh and cached is not None and cached.refresh_token and persistence is not None:
+        # Refresh ahead of expiry: the connector itself only refreshes tokens
+        # that have already expired.
+        fresh = _refresh_access_token(hostname, persistence, cached.refresh_token)
+        if fresh:
+            return fresh
     if needs_refresh and http_path:
         # A real connection forces the connector to refresh and re-persist.
         try:

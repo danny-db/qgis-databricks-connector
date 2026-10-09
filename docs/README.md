@@ -23,6 +23,7 @@ Load spatial data from Databricks into QGIS, keep SQL queries live in your proje
 | [Genie Agent](07-genie-agent.md) | Ask a Genie Agent questions in plain English; see its SQL, results and charts |
 | [Genie One](08-genie-one.md) | Ask questions across your whole workspace; add results to the map |
 | [Basemaps and styling](09-basemaps-and-styling.md) | Add an OpenStreetMap or Esri basemap and style your layers |
+| [**Explain this Map**](12-explain-this-map.md) | One click: a frontier model on your Databricks workspace explains the map, with no API key |
 
 ## Reference
 
@@ -37,7 +38,8 @@ Load spatial data from Databricks into QGIS, keep SQL queries live in your proje
 |---|---|
 | Main dialog (connections, tables, Custom Query) | **Plugins → Databricks DBSQL Connector → Connect to Databricks SQL**, or the Databricks toolbar icon |
 | Genie Agent | **Plugins → Databricks DBSQL Connector → Databricks Genie Agent** |
-| Genie One | **Plugins → Databricks DBSQL Connector → Databricks Genie One**, or the red chat-bubble toolbar icon |
+| Genie One | **Plugins → Databricks DBSQL Connector → Databricks Genie One**, or the Genie lamp on the toolbar |
+| Explain this Map | **Plugins → Databricks DBSQL Connector → Explain this Map**, or the red map-with-sparkle toolbar icon |
 | Re-load a layer's data | Select the layer, then **Plugins → Databricks DBSQL Connector → Update Layer Data from Databricks** |
 | Live mode on or off | Select the layer, then **Plugins → Databricks DBSQL Connector → Toggle Live Mode for Layer** |
 | Browser | **Browser** panel → **Databricks** |

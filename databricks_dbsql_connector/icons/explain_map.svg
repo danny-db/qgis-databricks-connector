@@ -1,0 +1,7 @@
+<svg width="300" height="300" viewBox="0 0 300 300" fill="none" xmlns="http://www.w3.org/2000/svg">
+<!-- Explain this Map: folded map with a sparkle -->
+<path d="M20 70L100 40L200 70L280 40V230L200 260L100 230L20 260V70Z" fill="#FF3621"/>
+<path d="M100 40V230M200 70V260" stroke="#FFFFFF" stroke-width="10" opacity="0.6"/>
+<path d="M150 95L163 135L203 148L163 161L150 201L137 161L97 148L137 135L150 95Z" fill="#FFFFFF"/>
+<path d="M232 88L238 106L256 112L238 118L232 136L226 118L208 112L226 106L232 88Z" fill="#FFFFFF"/>
+</svg>
