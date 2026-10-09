@@ -29,7 +29,6 @@
 | A saved-in-project layer shows in **Handle Unavailable Layers** when the project opens | Its saved connection isn't on this computer. Create a connection **with the same name** (see [Share a project](06-custom-queries.md#share-a-project-with-saved-queries)), then reopen the project |
 | *"Save this connection first…"* | Personal-access-token connections must be saved before **Save in project**. Click **Save Connection** in the main dialog |
 | *"Only a single SELECT … can be saved as a layer"* | Save in project accepts one `SELECT` or `WITH … SELECT` statement |
-| Temporary **Add as Layer** fails on a query without geometry | Use **Save in project** for summary tables |
 | Saved layer draws nothing | Zoom to it (right-click → **Zoom to Layer(s)**). Check the query returns a geometry column, and that the coordinates match the coordinate system (e.g. `ST_POINT(longitude, latitude, 4326)`; longitude first) |
 | Layer is slow when zoomed right out | It's fetching every feature in view. Zoom in, filter in your SQL, or aggregate (e.g. H3 cells) |
 

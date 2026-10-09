@@ -100,6 +100,6 @@ FROM my_catalog.transport.road_crashes
 GROUP BY LGA_NAME
 ORDER BY crashes DESC
 ```
-Use **Save in project** for summary tables: the temporary **Add as Layer** currently needs a geometry column.
+Summary tables work both ways: as a temporary layer, or with **Save in project** to keep them up to date in your project.
 
-> **Careful:** **Execute Query** runs whatever you type, including `DROP`, `UPDATE` or `DELETE`, with your own Databricks permissions. Only *Save in project* restricts what is saved.
+> **Tip:** like any SQL editor, **Execute Query** runs your statement as typed, with your Databricks permissions. *Save in project* keeps layers to a single `SELECT`, so saved projects only ever read data.
