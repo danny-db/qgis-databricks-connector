@@ -10,7 +10,7 @@ from qgis.PyQt.QtWidgets import (
     QTableWidget, QTableWidgetItem, QMessageBox,
     QProgressDialog, QHeaderView, QCheckBox,
     QGroupBox, QTextEdit, QPlainTextEdit, QSplitter,
-    QTreeWidget, QTreeWidgetItem, QWidget
+    QTreeWidget, QTreeWidgetItem, QWidget, QApplication
 )
 from qgis.core import (
     QgsVectorLayer, QgsProject, QgsDataSourceUri,
@@ -1114,6 +1114,18 @@ class DatabricksDialog(QDialog):
         self.oauth_hint_label.setVisible(not is_pat)
         self.sign_in_btn.setVisible(not is_pat)
 
+    def _saved_connection_name(self, hostname, http_path, auth_method):
+        """Name of the saved connection matching these details, or '' if the
+        current form hasn't been saved (project layers reference it by name)."""
+        name = self.connection_name_edit.text().strip()
+        if not name:
+            return ''
+        base = f"DatabricksConnector/Connections/{name}"
+        saved = (self.settings.value(f"{base}/hostname", ""),
+                 self.settings.value(f"{base}/http_path", ""),
+                 normalise_auth_method(self.settings.value(f"{base}/auth_method", AUTH_PAT)))
+        return name if saved == (hostname, http_path, auth_method) else ''
+
     def _validate_connection_inputs(self, hostname, http_path, access_token, auth_method):
         """Return True if the supplied fields are sufficient for the method."""
         if not hostname or not http_path:
@@ -1774,7 +1786,8 @@ import sys
                 'hostname': hostname,
                 'http_path': http_path,
                 'access_token': access_token,
-                'auth_method': auth_method
+                'auth_method': auth_method,
+                'connection_name': self._saved_connection_name(hostname, http_path, auth_method)
             }
 
             query_dialog = DatabricksQueryDialog(connection_config, self)
@@ -2916,6 +2929,14 @@ class DatabricksQueryDialog(QDialog):
         query_controls.addWidget(QLabel("Geometry column:"))
         query_controls.addWidget(self.geometry_column_edit)
         
+        # Issue #3: keep the query in the project instead of a temporary layer
+        self.save_in_project_check = QCheckBox("Save in project")
+        self.save_in_project_check.setToolTip(
+            "Save this query as a project layer: it is stored in the .qgz and\n"
+            "re-queries Databricks whenever the project is opened (like a PostGIS SQL layer).\n"
+            "Unticked: a temporary layer holding a copy of the results.")
+        query_controls.addWidget(self.save_in_project_check)
+
         self.add_layer_btn = QPushButton("Add as Layer")
         self.add_layer_btn.clicked.connect(self.add_as_layer)
         self.add_layer_btn.setEnabled(False)
@@ -3073,6 +3094,10 @@ class DatabricksQueryDialog(QDialog):
         layer_name = f"{layer_prefix}query_{timestamp}"
         
         geometry_column = self.geometry_column_edit.text().strip() or None
+
+        if self.save_in_project_check.isChecked():
+            self._add_project_layer(layer_name, geometry_column)
+            return
         
         # Show progress dialog
         self.progress_dialog = QProgressDialog("Creating layer...", "Cancel", 0, 0, self)
@@ -3090,6 +3115,45 @@ class DatabricksQueryDialog(QDialog):
         self.layer_thread.finished.connect(self.on_layer_finished)
         self.layer_thread.start()
     
+    def _add_project_layer(self, layer_name, geometry_column):
+        """Add the query as a 'databricks' provider layer saved in the project.
+
+        The project stores the SQL and the saved connection's name (never a
+        token); the layer re-queries Databricks for the visible map area.
+        """
+        from .databricks_provider import build_uri
+        try:
+            uri = build_uri(self.connection_config, sql_query=self.last_query,
+                            geom_column=geometry_column)
+        except ValueError as exc:
+            QMessageBox.warning(self, "Cannot Save in Project", str(exc))
+            return
+
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            layer = QgsVectorLayer(uri, layer_name, "databricks")
+        finally:
+            QApplication.restoreOverrideCursor()
+
+        if not layer.isValid():
+            provider = layer.dataProvider()
+            detail = getattr(provider, "error_message", "") if provider else ""
+            QMessageBox.critical(self, "Layer Creation Failed",
+                                 detail or "Databricks could not open this query as a layer.")
+            return
+
+        layer.setCustomProperty("databricks/is_databricks_layer", True)
+        layer.setCustomProperty("databricks/project_layer", True)
+        QgsProject.instance().addMapLayer(layer)
+        QgsMessageLog.logMessage(
+            f"Added project layer {layer.name()} ({layer.featureCount()} features) from SQL",
+            "Query Dialog", Qgis.MessageLevel.Info)
+        QMessageBox.information(
+            self, "Layer Added",
+            f"Layer '{layer.name()}' added with {layer.featureCount()} features.\n\n"
+            "It is saved with the project and re-queries Databricks each time the "
+            "project is opened. Save the project to keep it.")
+
     def on_layer_progress(self, message):
         """Update progress dialog"""
         if hasattr(self, 'progress_dialog'):

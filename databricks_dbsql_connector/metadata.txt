@@ -3,7 +3,7 @@ name=Databricks DBSQL Connector
 qgisMinimumVersion=3.16
 qgisMaximumVersion=4.99
 description=Connect QGIS to Databricks SQL warehouses and access geospatial data directly from Unity Catalog
-version=1.5.1
+version=1.6.0
 author=Danny Wong
 email=danny.wong@databricks.com
 
@@ -56,7 +56,14 @@ about=A QGIS plugin that provides direct connectivity to Databricks SQL warehous
     For installation instructions and documentation, visit the GitHub repository.
 
 # Changelog
-changelog=1.5.1 - Security and Qt6 compatibility fixes (QGIS plugin site scans)
+changelog=1.6.0 - Save custom SQL queries as project layers (issue #3)
+    - New: Custom Query "Save in project" — the query is saved in the .qgz and
+      re-queries Databricks when the project opens (like PostGIS SQL layers)
+    - New: project layers fetch only the visible map area; select, identify and refresh work
+    - Security: project files store the saved connection name, never an access token
+    - Fixed: Databricks data provider (GEOMETRY(n)/GEOGRAPHY(n) columns, extent, Multi* types)
+
+    1.5.1 - Security and Qt6 compatibility fixes (QGIS plugin site scans)
     - Security: identifiers with backticks are now escaped correctly in all SQL
     - Security: live layer viewport bound as query parameters; https-only API requests
     - Security: errors that were silently ignored are now logged

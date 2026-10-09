@@ -1175,7 +1175,9 @@ class DatabricksRootItem(QgsDataCollectionItem):
                     'http_path': settings.value("http_path", ""),
                     'access_token': settings.value("access_token", ""),
                     'auth_method': normalise_auth_method(
-                        settings.value("auth_method", AUTH_PAT))
+                        settings.value("auth_method", AUTH_PAT)),
+                    # Lets layers saved in a project refer to this connection by name
+                    'connection_name': conn_name
                 }
                 settings.endGroup()
 

@@ -18,6 +18,15 @@ Or install from ZIP: download [`databricks_dbsql_connector.zip`](https://github.
 - [Walkthrough (Mac)](https://www.youtube.com/watch?v=M5ZvVWpZnQY)
 - [Windows installation](https://www.youtube.com/watch?v=zpyWuKZTePQ)
 
+## What's New in v1.6.0
+
+### Save Custom SQL Queries in the Project (issue #3)
+- **Save in project**: In Custom Query, tick **Save in project** before **Add as Layer**. The query is stored in the `.qgz` and re-runs against Databricks every time the project is opened, like a PostGIS SQL layer
+- **Only fetches what you see**: The layer queries Databricks for the visible map area, so large results stay responsive
+- **No tokens in project files**: The project stores the SQL and the **saved connection's name**, never an access token. OAuth layers also open for colleagues who sign in with their own account
+- **Select, identify and refresh work**: Stable feature ids; *Refresh* re-reads the query
+- **Fixed**: the plugin's Databricks data provider now recognises `GEOMETRY(n)` / `GEOGRAPHY(n)` columns, reads the extent, and handles Multi* geometry types correctly
+
 ## What's New in v1.5.1
 
 - **Security fixes** from the QGIS plugin site scan: SQL identifiers containing backticks are now escaped correctly, live-layer viewport values are sent as query parameters, Databricks API calls are https-only, and previously ignored errors are logged
@@ -238,6 +247,11 @@ The **Auth Method** dropdown lets you pick how the plugin authenticates:
 2. Write your SQL query
 3. Click "Execute Query"
 4. Click "Add as Layer"
+5. To keep the layer in your project, tick **Save in project** before clicking **Add as Layer**:
+   - The project saves the SQL and the saved connection's name (no token). Save the project to keep the layer
+   - When the project is reopened, the layer re-queries Databricks for the visible map area
+   - Personal Access Token connections must be saved first (so the token stays in your QGIS settings); OAuth works either way
+   - Only a single `SELECT` (or `WITH … SELECT`) query can be saved
 
 ## Supported Geometry Types
 
