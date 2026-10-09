@@ -28,8 +28,8 @@ Branch `feature/issue-3-sql-project-layers`. Install the zip built from this bra
 | 7 | Load `my-pat`, run the query, tick **Save in project** → **Add as Layer**; save, close and reopen the project | Works like case 5. The `.qgs` has `conn=my-pat` and **no token** |
 | 8 | Type a new PAT connection **without saving it**. Custom Query → **Save in project** → **Add as Layer** | Warning "Save this connection first…"; no layer is added |
 | 9 | From the **Browser panel**: right-click a connection → Custom Query → **Save in project** | Same as case 2 (the connection name comes from the Browser) |
-| 10 | Edit the SQL to `DROP TABLE x` (or two statements separated by `;`) → **Save in project** | Refused: "Only a single SELECT…" |
-| 11 | Query **without a geometry column** (e.g. `SELECT tier, COUNT(*) n FROM … GROUP BY tier`) → **Save in project** | An attribute-only layer (table icon); the attribute table shows the rows |
+| 10 | **Don't execute DROP/UPDATE to test this:** Execute Query really runs them. Instead, execute a valid query that starts with a `--` comment and ends with `;` (Q5 in the test queries) → **Save in project** | Accepted (comment and trailing `;` handled). Refusing DROP and multi-statement SQL is covered by the automated tests, and non-SELECT statements return no rows, so **Add as Layer** stays disabled |
+| 11 | Query **without a geometry column** (Q4) → **Save in project** | An attribute-only layer (table icon); the attribute table shows the rows. *Note: the temporary **Add as Layer** fails for no-geometry queries; that's an existing bug, not from issue #3* |
 | 12 | Right-click the layer → **Refresh**, after changing data in Databricks if you can | New or changed rows appear |
 | 13 | Rename or delete the saved connection `my-oauth`, then reopen the project from case 5 | The OAuth layer still opens: it falls back to the workspace host and path with your own sign-in |
 | 14 | Delete `my-pat`, then reopen the project from case 7 | The PAT layer shows as **unavailable** (QGIS's Handle Unavailable Layers dialog), with no crash. Re-create `my-pat` with the same name and reopen: the layer works |
