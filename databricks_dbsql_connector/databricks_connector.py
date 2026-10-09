@@ -195,12 +195,30 @@ class DatabricksConnector:
                 Qgis.MessageLevel.Warning
             )
         
+
+        # Strip access tokens that older versions stored on layers, whenever a
+        # project is opened or layers are added (see databricks_layer_credentials)
+        from qgis.core import QgsProject
+        from .databricks_layer_credentials import migrate_layer, migrate_project
+        self._migrate_on_read = lambda *args: migrate_project()
+        self._migrate_on_add = lambda layers: [migrate_layer(lyr) for lyr in layers]
+        QgsProject.instance().readProject.connect(self._migrate_on_read)
+        QgsProject.instance().layersAdded.connect(self._migrate_on_add)
+        migrate_project()
         # Will be set False in run()
         self.first_start = True
 
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""
         
+        # Stop migrating layers' stored tokens (connected in initGui)
+        try:
+            from qgis.core import QgsProject
+            QgsProject.instance().readProject.disconnect(self._migrate_on_read)
+            QgsProject.instance().layersAdded.disconnect(self._migrate_on_add)
+        except (AttributeError, TypeError, RuntimeError):
+            pass   # never connected (e.g. initGui failed early)
+
         # Cleanup live layer managers
         try:
             from .databricks_live_layer import LiveLayerRegistry
@@ -519,18 +537,16 @@ class DatabricksConnector:
             return
         
         # Refresh each layer
+        from .databricks_layer_credentials import layer_connection_config, credentials_ready
         for layer in databricks_layers:
-            hostname = layer.customProperty("databricks/hostname", "")
-            http_path = layer.customProperty("databricks/http_path", "")
-            access_token = layer.customProperty("databricks/access_token", "")
-            auth_method = normalise_auth_method(
-                layer.customProperty("databricks/auth_method", AUTH_PAT))
+            creds = layer_connection_config(layer)
+            hostname, http_path = creds['hostname'], creds['http_path']
+            access_token, auth_method = creds['access_token'], creds['auth_method']
             full_name = layer.customProperty("databricks/full_name", "")
             geometry_column = layer.customProperty("databricks/geometry_column", "")
             max_features_str = layer.customProperty("databricks/max_features", "0")
 
-            token_ok = bool(access_token) or auth_method != AUTH_PAT
-            if not all([hostname, http_path, full_name]) or not token_ok:
+            if not full_name or not credentials_ready(creds):
                 QgsMessageLog.logMessage(
                     f"Skipping layer '{layer.name()}' - missing connection info",
                     "Databricks Connector",
@@ -787,18 +803,10 @@ class DatabricksConnector:
             else:
                 # Enable live mode
                 # Get connection config from layer properties
-                connection_config = {
-                    'hostname': layer.customProperty("databricks/hostname", ""),
-                    'http_path': layer.customProperty("databricks/http_path", ""),
-                    'access_token': layer.customProperty("databricks/access_token", ""),
-                    'auth_method': normalise_auth_method(
-                        layer.customProperty("databricks/auth_method", AUTH_PAT))
-                }
+                from .databricks_layer_credentials import layer_connection_config, credentials_ready
+                connection_config = layer_connection_config(layer)
 
-                _token_ok = (bool(connection_config['access_token'])
-                             or connection_config['auth_method'] != AUTH_PAT)
-                if not (connection_config['hostname'] and connection_config['http_path']
-                        and _token_ok):
+                if not credentials_ready(connection_config):
                     QMessageBox.warning(
                         self.iface.mainWindow(),
                         "Missing Connection Info",

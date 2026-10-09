@@ -1735,11 +1735,13 @@ import sys
             http_path = self.http_path_edit.text().strip()
             access_token = self.access_token_edit.text().strip()
             
-            # Store metadata as custom properties
-            layer.setCustomProperty("databricks/hostname", hostname)
-            layer.setCustomProperty("databricks/http_path", http_path)
-            layer.setCustomProperty("databricks/access_token", access_token)
-            layer.setCustomProperty("databricks/auth_method", self._auth_method())
+            # Store connection details (never the token) for re-loading
+            from .databricks_layer_credentials import tag_layer
+            tag_layer(layer, {
+                'hostname': hostname, 'http_path': http_path,
+                'access_token': access_token, 'auth_method': self._auth_method(),
+                'connection_name': self._saved_connection_name(hostname, http_path, self._auth_method()),
+            })
             
             # Store table info
             table_info = self.loading_thread.table_info
@@ -2223,7 +2225,8 @@ class QueryLayerCreationThread(QThread):
                 memory_layer = QgsVectorLayer(layer_def, self.layer_name, "memory")
             else:
                 # No geometry, create attribute-only layer
-                memory_layer = QgsVectorLayer("None", self.layer_name, "memory")
+                layer_def = "None"
+                memory_layer = QgsVectorLayer(layer_def, self.layer_name, "memory")
             
             if not memory_layer.isValid():
                 self.finished.emit(False, f"Failed to create memory layer", None)

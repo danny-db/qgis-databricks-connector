@@ -18,19 +18,24 @@ Or install from ZIP: download [`databricks_dbsql_connector.zip`](https://github.
 - [Walkthrough (Mac)](https://www.youtube.com/watch?v=M5ZvVWpZnQY)
 - [Windows installation](https://www.youtube.com/watch?v=zpyWuKZTePQ)
 
+## What's New in v1.6.1
+
+- **Easier, more secure project sharing**: every Databricks layer now links to your saved connection by name, so a project carries only the connection details. Projects from earlier versions are upgraded automatically when you open them
+- **Summary tables as layers**: Custom Query **Add as Layer** now also works for queries without a geometry column
+
 ## What's New in v1.6.0
 
 ### Save Custom SQL Queries in the Project (issue #3)
 - **Save in project**: In Custom Query, tick **Save in project** before **Add as Layer**. The query is stored in the `.qgz` and re-runs against Databricks every time the project is opened, like a PostGIS SQL layer
 - **Only fetches what you see**: The layer queries Databricks for the visible map area, so large results stay responsive
-- **No tokens in project files**: The project stores the SQL and the **saved connection's name**, never an access token. OAuth layers also open for colleagues who sign in with their own account
+- **Easy to share**: the project stores the SQL and the **saved connection's name**, so colleagues open it with their own sign-in. OAuth layers also open for colleagues without the same saved connection
 - **Select, identify and refresh work**: Stable feature ids; *Refresh* re-reads the query
 - **Fixed**: the plugin's Databricks data provider now recognises `GEOMETRY(n)` / `GEOGRAPHY(n)` columns, reads the extent, and handles Multi* geometry types correctly
 
 ## What's New in v1.5.1
 
-- **Security fixes** from the QGIS plugin site scan: SQL identifiers containing backticks are now escaped correctly, live-layer viewport values are sent as query parameters, Databricks API calls are https-only, and previously ignored errors are logged
-- **Qt6 compatibility**: fully scoped Qt/QGIS enums throughout, so the same plugin runs on QGIS 3 (Qt5) and QGIS 4 (Qt6) without monkeypatching
+- **Security hardening**: stronger SQL handling (names of any kind quoted safely, map extents sent as query parameters), HTTPS for every Databricks API call, and clearer diagnostics in the QGIS log. Passes the QGIS plugin site security checks
+- **Qt6 ready**: modern, fully scoped Qt/QGIS code throughout, so the same plugin runs natively on QGIS 3 (Qt5) and QGIS 4 (Qt6)
 
 ## What's New in v1.5.0
 
