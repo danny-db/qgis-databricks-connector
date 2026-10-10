@@ -2,6 +2,14 @@
 
 What changed in each release of the QGIS Databricks DBSQL Connector, newest first. For how to use each feature, see the [user guide](docs/README.md).
 
+## v1.8.0
+
+### Lakehouse Real-Time warehouses
+- **Connect to Lakehouse Real-Time SQL warehouses** as well as standard ones. Every feature works on them: Discover Tables, the Browser panel, Add Selected Layers, Custom Query (including Add as Layer and **Save in project**), live layers, Update Layer Data, Genie and Explain this Map
+- **One-click kernel install**: Real-Time warehouses connect through the Databricks SQL kernel. The first time you **Sign in**, **Test Connection**, **Discover Tables** or expand the connection in the **Browser panel**, the plugin offers to install it. It takes a few seconds and needs no restart
+- **One sign-in**: with OAuth, Real-Time connections reuse the plugin's saved sign-in, so the browser opens only once, as on standard warehouses
+- **Same results everywhere**: geometry from Real-Time warehouses appears as the same text as on standard warehouses, so results, layers and Genie behave identically
+
 ## v1.7.1
 
 - **Installer**: installs the standard `databricks-sql-connector` package

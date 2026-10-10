@@ -42,6 +42,13 @@ You only sign in once. The plugin refreshes the sign-in automatically, and the s
 ## Test the connection
 Click **Test Connection**. You should see *"Connection successful!"*. If not, see [Troubleshooting](11-troubleshooting.md#cant-connect).
 
+## Lakehouse Real-Time warehouses
+Real-Time SQL warehouses connect through the **Databricks SQL kernel**, a small add-on to `databricks-sql-connector`. The first time you **Sign in**, **Test Connection**, **Discover Tables** or expand the connection in the **Browser** panel, the plugin offers to add it:
+
+![The plugin offers to install the Databricks SQL kernel for a Lakehouse Real-Time warehouse](images/10-realtime-kernel-offer.png)
+
+Click **Yes** and wait a few seconds for *"The Databricks SQL kernel is installed"*, then try again. No restart is needed. From then on every feature works as on a standard warehouse, and with OAuth one sign-in covers everything.
+
 ## Saved connections
 - **Saved Connections** at the top lists your connections; pick one to load it.
 - **Save Connection** saves changes; **Delete Connection** removes the selected one.

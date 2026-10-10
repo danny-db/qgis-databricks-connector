@@ -26,7 +26,7 @@ New to the plugin? The **[user guide](docs/README.md)** walks through every feat
 | **Work with tables too big to download** | **Live layers** fetch only what's on screen and refresh as you pan and zoom | [Live layers](docs/05-live-layers.md) |
 | **Map any SQL result and keep it in your project** | **Custom Query** with **Save in project**: the query re-runs against Databricks whenever the project opens, like a PostGIS SQL layer | [Custom queries](docs/06-custom-queries.md) |
 | **Share a project safely** | Layers link to a saved connection by name, so projects carry no tokens; colleagues open them with their own sign-in | [Security and privacy](docs/10-security-and-privacy.md) |
-| **Sign in the way your organisation does** | **OAuth** (browser login / SSO) or a personal access token | [Connect](docs/02-connect.md) |
+| **Sign in the way your organisation does** | **OAuth** (browser login / SSO) or a personal access token, on standard and **Lakehouse Real-Time** SQL warehouses | [Connect](docs/02-connect.md) |
 | **Use the QGIS you have** | One plugin for QGIS 3 (Qt5) and QGIS 4 (Qt6), on Mac and Windows | [Install](docs/01-install.md) |
 
 ## Use cases
@@ -55,6 +55,15 @@ The examples use Victorian road-crash data; swap in your own tables. Each takes 
 ### Explore a very large table (live layers)
 1. In the Browser panel, right-click a spatial table → **Add as Live Layer (Viewport)**.
 2. Pan and zoom: only features in view are fetched, so tables with millions of rows stay responsive.
+
+### Map data from a Lakehouse Real-Time warehouse (new in v1.8.0)
+1. Create a connection with the Real-Time warehouse's **HTTP Path**, then click **Sign in** (OAuth) or **Test Connection**.
+2. The first time, the plugin offers to add the **Databricks SQL kernel** that Real-Time warehouses use. Click **Yes**: it takes a few seconds and no restart is needed.
+3. Everything works as on a standard warehouse: Discover Tables, the Browser panel, Custom Query and **Save in project**, live layers, Update Layer Data, Genie and Explain this Map. One OAuth sign-in covers it all.
+
+## What's new in v1.8.0
+
+- **Lakehouse Real-Time warehouses**: connect and map data from Real-Time SQL warehouses, with a one-click install of the Databricks SQL kernel they use. Every feature works on them, with OAuth or a personal access token
 
 ## What's new in v1.7
 
@@ -136,7 +145,7 @@ qgis-databricks-connector/
 │   ├── databricks_genie_charts.py    # Draws Genie chart specs (matplotlib)
 │   ├── databricks_ai_core.py         # Foundation Model API calls (Explain this Map)
 │   ├── databricks_map_explain.py     # Explain this Map dialog and map capture
-│   ├── databricks_kernel.py          # Lakehouse Real-Time kernel helper (preview)
+│   ├── databricks_kernel.py          # Lakehouse Real-Time: kernel install + result normalising
 │   └── icons/                        # Plugin icons
 ├── docs/                             # User guide
 ├── .github/workflows/                # GitHub Actions for releases

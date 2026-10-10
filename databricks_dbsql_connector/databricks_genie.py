@@ -41,6 +41,7 @@ from .databricks_auth import (
     get_bearer_token,
 )
 from .databricks_genie_charts import infer_spec, render_spec
+from .databricks_kernel import normalise_rows
 
 
 # ---------------------------------------------------------------------------
@@ -439,7 +440,7 @@ class GenieReQueryThread(QThread):
             with conn.cursor() as cursor:
                 cursor.execute(wrapped_query)
                 columns = [d[0] for d in cursor.description]
-                rows = [list(r) for r in cursor.fetchall()]
+                rows = [list(r) for r in normalise_rows(cursor.fetchall())]
             conn.close()
 
             self.data_ready.emit(columns, rows)
