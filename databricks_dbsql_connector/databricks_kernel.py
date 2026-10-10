@@ -5,7 +5,8 @@ databricks-sql-connector uses by default. Connector 4.6+ notices this and
 retries on its Rust "kernel" backend, which ships separately as the optional
 ``databricks-sql-kernel`` package. These helpers recognise the resulting
 error and offer a one-click install, so users who installed the connector
-before v1.7.0 can connect without leaving QGIS. Preview: full Real-Time support is planned for a later release.
+before v1.8.0 can connect without leaving QGIS. They also make kernel results
+look like classic results (geometry as EWKT text).
 """
 
 import importlib
@@ -15,7 +16,7 @@ import sys
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtGui import QCursor
 from qgis.PyQt.QtWidgets import QApplication, QMessageBox
-from qgis.core import Qgis, QgsMessageLog
+from qgis.core import Qgis, QgsGeometry, QgsMessageLog
 
 KERNEL_REQUIREMENT = "databricks-sql-kernel>=1.1.0,<2.0.0"
 _LOG_TAG = "Databricks Connector"
@@ -90,3 +91,42 @@ def offer_kernel_install(parent, message):
             f'  pip install --user "{KERNEL_REQUIREMENT}"\n'
             "using the same Python as QGIS (Python 3.10 or later).")
     return True
+
+
+def _is_kernel_geometry(value):
+    return isinstance(value, dict) and "wkb" in value and "srid" in value
+
+
+def _as_ewkt(value):
+    """``{'srid': 4326, 'wkb': b'...'}`` -> ``'SRID=4326;POINT (145 -37.8)'``, as Thrift returns it."""
+    geometry = QgsGeometry()
+    geometry.fromWkb(bytes(value["wkb"]))
+    wkt = geometry.asWkt(12)      # 12 decimals: -37.8 stays -37.8, as the classic backend writes it
+    return f"SRID={value['srid']};{wkt}" if value.get("srid") else wkt
+
+
+def normalise_rows(rows):
+    """Make kernel results look like Thrift results.
+
+    The kernel (used by Lakehouse Real-Time warehouses) returns GEOMETRY and
+    GEOGRAPHY values as ``{'srid', 'wkb'}`` dicts, while the classic backend
+    returns EWKT text. Converting here means the results table, geometry
+    detection and layer building behave the same on every warehouse.
+    """
+    if not rows:
+        return rows
+    geo_columns = [i for i, v in enumerate(rows[0]) if _is_kernel_geometry(v)]
+    if not geo_columns:
+        geo_columns = [i for i in range(len(rows[0]))
+                       if any(_is_kernel_geometry(r[i]) for r in rows[:50])]
+    if not geo_columns:
+        return rows
+    fixed = []
+    for row in rows:
+        values = list(row)
+        for i in geo_columns:
+            if _is_kernel_geometry(values[i]):
+                values[i] = _as_ewkt(values[i])
+        fixed.append(values)
+    return fixed
+

@@ -21,6 +21,7 @@ except ImportError:
     DATABRICKS_AVAILABLE = False
 
 from .databricks_dialog import DatabricksQueryDialog
+from .databricks_kernel import is_kernel_missing, offer_kernel_install
 from .databricks_auth import (
     AUTH_PAT,
     normalise_auth_method,
@@ -56,6 +57,9 @@ class DatabricksConnectionItem(QgsDataCollectionItem):
         try:
             catalogs = self._get_catalogs()
             children = []
+            # A Lakehouse Real-Time warehouse without the kernel lists nothing: say why
+            if not catalogs and is_kernel_missing(getattr(self, "_last_error", "")):
+                children.append(DatabricksKernelItem(self, self._last_error))
             
             # Add all catalogs first (these come sorted alphabetically from the query)
             for catalog in catalogs:
@@ -114,6 +118,7 @@ class DatabricksConnectionItem(QgsDataCollectionItem):
             return catalogs
             
         except Exception as e:
+            self._last_error = str(e)
             QgsMessageLog.logMessage(
                 f"Error getting catalogs from information_schema: {str(e)}",
                 "Databricks Browser",
@@ -1100,6 +1105,37 @@ class DatabricksColumnItem(QgsDataItem):
         else:
             # String and other types
             self.setIcon(QgsApplication.getThemeIcon('/mIconFieldText.svg'))
+
+class DatabricksKernelItem(QgsDataItem):
+    """Shown under a Lakehouse Real-Time connection when the kernel add-on is missing."""
+
+    def __init__(self, parent, error):
+        super().__init__(QgsDataItem.Type.Collection, parent,
+                         "Install the Databricks SQL kernel (double-click)",
+                         parent.path() + "/install-kernel")
+        self._error = error
+        self.setIcon(QgsApplication.getThemeIcon('/mIconWarning.svg'))
+        self.setToolTip("This SQL warehouse uses Lakehouse Real-Time, which needs the "
+                        "Databricks SQL kernel. Double-click to install it.")
+
+    def hasChildren(self):
+        return False
+
+    def handleDoubleClick(self):
+        self._install()
+        return True
+
+    def actions(self, parent):
+        action = QAction("Install Databricks SQL Kernel...", parent)
+        action.triggered.connect(self._install)
+        return [action]
+
+    def _install(self):
+        offer_kernel_install(QgsApplication.instance().activeWindow(), self._error)
+        connection = self.parent()
+        if connection is not None:
+            connection.refresh()
+
 
 class DatabricksQueryItem(QgsDataItem):
     """Item for executing custom queries"""

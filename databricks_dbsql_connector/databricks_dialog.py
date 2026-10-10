@@ -27,7 +27,7 @@ try:
 except ImportError:
     DATABRICKS_AVAILABLE = False
 
-from .databricks_kernel import offer_kernel_install
+from .databricks_kernel import normalise_rows, offer_kernel_install
 from .databricks_auth import (
     AUTH_PAT,
     AUTH_OAUTH_U2M,
@@ -36,6 +36,7 @@ from .databricks_auth import (
     connect_kwargs,
     connect_kwargs_from_config,
     prime_oauth,
+    ensure_oauth_sign_in,
 )
 
 try:
@@ -102,6 +103,8 @@ class ConnectionTestThread(QThread):
             return
 
         try:
+            if self.auth_method == AUTH_OAUTH_U2M:
+                ensure_oauth_sign_in(self.hostname)   # one browser sign-in, saved for every warehouse type
             connection = sql.connect(
                 **connect_kwargs(self.hostname, self.http_path,
                                  self.access_token, self.auth_method)
@@ -130,6 +133,7 @@ class TableDiscoveryThread(QThread):
         self.http_path = http_path
         self.access_token = access_token
         self.auth_method = auth_method
+        self.error = ""
 
     def run(self):
         tables = []
@@ -173,6 +177,7 @@ class TableDiscoveryThread(QThread):
             connection.close()
             
         except Exception as e:
+            self.error = str(e)
             QgsMessageLog.logMessage(
                 f"Error discovering tables: {str(e)}",
                 "Databricks Connector",
@@ -1368,6 +1373,9 @@ import sys
     def on_tables_discovered(self, tables):
         """Handle discovered tables"""
         self.progress_dialog.close()
+        # A Lakehouse Real-Time warehouse without the kernel finds nothing: offer it
+        if not tables and offer_kernel_install(self, getattr(self.discovery_thread, "error", "")):
+            return
         self.tables = tables
         
         # Populate table widget
@@ -1997,8 +2005,8 @@ class QueryExecutionThread(QThread):
                 if cursor.description:
                     columns = [desc[0] for desc in cursor.description]
                 
-                # Fetch results
-                rows = cursor.fetchall()
+                # Fetch results (kernel geometry dicts -> EWKT, like the classic backend)
+                rows = normalise_rows(cursor.fetchall())
             
             connection.close()
             
@@ -2048,8 +2056,8 @@ class QueryLayerCreationThread(QThread):
                 if cursor.description:
                     columns = [desc[0] for desc in cursor.description]
                 
-                # Fetch results
-                rows = cursor.fetchall()
+                # Fetch results (kernel geometry dicts -> EWKT, like the classic backend)
+                rows = normalise_rows(cursor.fetchall())
             
             connection.close()
             

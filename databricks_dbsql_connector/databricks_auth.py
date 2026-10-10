@@ -23,6 +23,7 @@ import base64
 import json
 import logging
 import os
+import re
 import stat
 import threading
 
@@ -203,6 +204,15 @@ def connect_kwargs(hostname, http_path, access_token=None, auth_method=AUTH_PAT)
     method = normalise_auth_method(auth_method)
     kwargs = {"server_hostname": hostname, "http_path": http_path}
     if method == AUTH_OAUTH_U2M:
+        # Lakehouse Real-Time warehouses only speak the kernel protocol, and the
+        # kernel runs its own browser sign-in on every connection. Hand it the
+        # plugin's cached OAuth token instead (renewed ahead of expiry), so one
+        # sign-in keeps covering SQL, Genie and Explain this Map.
+        # Uses the cache only; Sign in / Test Connection fill it (ensure_oauth_sign_in).
+        token = get_bearer_token(hostname, None, auth_method=AUTH_OAUTH_U2M)
+        if token and is_realtime_warehouse(hostname, http_path, token):
+            kwargs.update(access_token=token, use_kernel=True)
+            return kwargs
         _ensure_oauth_scopes()
         kwargs["auth_type"] = _DATABRICKS_OAUTH_AUTH_TYPE
         kwargs["oauth_client_id"] = _OAUTH_CLIENT_ID
@@ -212,6 +222,8 @@ def connect_kwargs(hostname, http_path, access_token=None, auth_method=AUTH_PAT)
             kwargs["experimental_oauth_persistence"] = persistence
         return kwargs
     kwargs["access_token"] = access_token
+    if access_token and is_realtime_warehouse(hostname, http_path, access_token):
+        kwargs["use_kernel"] = True       # skip the classic protocol a Real-Time warehouse rejects
     return kwargs
 
 
@@ -240,6 +252,7 @@ def prime_oauth(hostname, http_path, auth_method=AUTH_OAUTH_U2M):
     except Exception:
         return False, "databricks-sql-connector is not installed."
     try:
+        _interactive_oauth(hostname)      # browser once; tokens saved to the plugin's cache
         connection = sql.connect(
             **connect_kwargs(hostname, http_path, auth_method=AUTH_OAUTH_U2M)
         )
@@ -279,10 +292,8 @@ def _refresh_access_token(hostname, persistence, refresh_token):
     """Exchange the cached refresh token for a new access token now, via the
     workspace's OAuth token endpoint, and persist the new pair. Returns the
     access token, or None (the caller then falls back to a connector refresh)."""
-    host = (hostname or "").strip()
-    host = host[len("https://"):] if host.startswith("https://") else host
-    host = host.rstrip("/")
-    if not host or any(c in host for c in "/@?#"):
+    host = _clean_host(hostname)
+    if not host:
         return None
     try:
         import urllib.parse
@@ -307,6 +318,84 @@ def _refresh_access_token(hostname, persistence, refresh_token):
         return access
     except Exception as exc:
         logger.info("Early OAuth refresh failed, falling back to the connector: %s", exc)
+        return None
+
+
+def _clean_host(hostname):
+    """Bare workspace host (no scheme, slash or path), or None if it looks unsafe."""
+    host = (hostname or "").strip()
+    host = host[len("https://"):] if host.startswith("https://") else host
+    host = host.rstrip("/")
+    if not host or any(c in host for c in "/@?#"):
+        return None
+    return host
+
+
+_REALTIME_CACHE = {}
+
+
+def is_realtime_warehouse(hostname, http_path, token):
+    """True if ``http_path`` points at a Lakehouse Real-Time SQL warehouse.
+
+    Asks the SQL Warehouses API once per warehouse (cached for the session).
+    Any error means "not Real-Time", so standard warehouses are never affected.
+    """
+    match = re.search(r"/sql/1\.0/warehouses/([0-9A-Za-z]+)", http_path or "")
+    host = _clean_host(hostname)
+    if not match or not host or not token:
+        return False
+    key = (host, match.group(1))
+    if key not in _REALTIME_CACHE:
+        try:
+            import urllib.request
+
+            request = urllib.request.Request(
+                f"https://{host}/api/2.0/sql/warehouses/{match.group(1)}",
+                headers={"Authorization": f"Bearer {token}"})
+            with urllib.request.urlopen(request, timeout=20) as resp:  # nosec B310 - fixed https URL on the workspace host
+                info = json.loads(resp.read().decode("utf-8"))
+            _REALTIME_CACHE[key] = str(info.get("warehouse_type", "")).upper() == "REALTIME"
+        except Exception as exc:
+            logger.info("Could not read the warehouse type (assuming standard): %s", exc)
+            _REALTIME_CACHE[key] = False
+    return _REALTIME_CACHE[key]
+
+
+def ensure_oauth_sign_in(hostname):
+    """Make sure the plugin's OAuth cache holds a token (browser only if needed)."""
+    return _interactive_oauth(hostname)
+
+
+def _interactive_oauth(hostname):
+    """Sign in through the browser (only if needed) and save the tokens to the
+    plugin's cache, without opening a SQL session, so it works for every
+    warehouse type. Returns the access token, or None."""
+    persistence = _make_oauth_persistence()
+    if persistence is None:
+        return None
+    _ensure_oauth_scopes()
+    try:
+        from databricks.sql.auth import auth as _dbsql_auth
+        from databricks.sql.auth.authenticators import DatabricksOAuthProvider
+
+        args = dict(hostname=_cache_key(hostname), oauth_persistence=persistence,
+                    redirect_port_range=[_OAUTH_REDIRECT_PORT], client_id=_OAUTH_CLIENT_ID,
+                    scopes=list(_dbsql_auth.PYSQL_OAUTH_SCOPES))
+        try:   # connector 4.x needs an HTTP client; 3.x does not take one
+            from databricks.sql import __version__ as _dbsql_version
+            from databricks.sql.common.unified_http_client import UnifiedHttpClient
+            from databricks.sql.utils import build_client_context
+
+            client = UnifiedHttpClient(build_client_context(hostname, _dbsql_version))
+            provider = DatabricksOAuthProvider(http_client=client, **args)
+        except ImportError:
+            provider = DatabricksOAuthProvider(**args)
+        headers = {}
+        provider.add_headers(headers)
+        auth = headers.get("Authorization", "")
+        return auth[len("Bearer "):] if auth.startswith("Bearer ") else None
+    except Exception as exc:
+        logger.warning("OAuth sign-in failed: %s", exc)
         return None
 
 
