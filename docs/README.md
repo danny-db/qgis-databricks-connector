@@ -50,4 +50,4 @@ Load spatial data from Databricks into QGIS, keep SQL queries live in your proje
 - Tables with `GEOMETRY` or `GEOGRAPHY` columns, or queries that build geometry, e.g. `ST_POINT(longitude, latitude, 4326)`.
 - For Genie: access to a Genie Agent (Genie Agent dialog) or to Genie One (Genie One dialog).
 
-*Contributors: the regression checklist for project layers is in [manual-test-plan-issue-3.md](manual-test-plan-issue-3.md).*
+*Contributors: the regression checklist for project layers is in [manual-test-plan-issue-3.md](https://github.com/danny-db/qgis-databricks-connector/blob/main/docs/manual-test-plan-issue-3.md).*

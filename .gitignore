@@ -60,3 +60,6 @@ docs/_build/
 
 # pb_tool configuration (if using pb_tool for packaging)
 pb_tool.cfg
+
+# MkDocs build output
+site/

@@ -1,0 +1,25 @@
+/* Databricks palette: navy header, lava (red) accents */
+:root, [data-md-color-scheme="default"] {
+  --md-primary-fg-color: #1b3139;
+  --md-primary-fg-color--light: #2c4a55;
+  --md-primary-fg-color--dark: #0f1f24;
+  --md-accent-fg-color: #ff3621;
+  --md-typeset-a-color: #d92a16;
+}
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #0f1f24;
+  --md-accent-fg-color: #ff5f46;
+  --md-typeset-a-color: #ff7a63;
+  --md-default-bg-color: #11181c;
+}
+.md-header__button.md-logo img { height: 1.6rem; }
+.md-typeset h1 { font-weight: 700; color: var(--md-default-fg-color); }
+.md-typeset h2 { border-bottom: 1px solid var(--md-default-fg-color--lightest); padding-bottom: .25em; }
+/* screenshots: framed, never wider than the content */
+.md-typeset img { border-radius: 8px; box-shadow: 0 2px 12px rgba(0,0,0,.12); max-width: 100%; }
+.md-typeset table:not([class]) { font-size: .72rem; }
+.md-typeset table:not([class]) th { background: var(--md-primary-fg-color); color: #fff; }
+.md-typeset kbd { font-size: .7rem; }
+/* small screens: long inline code wraps; wide tables scroll inside their own box */
+.md-typeset code { overflow-wrap: anywhere; }
+.md-typeset table:not([class]) { display: block; max-width: 100%; overflow-x: auto; }
