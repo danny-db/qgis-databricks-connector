@@ -13,7 +13,7 @@ Put your Databricks data on the map. This QGIS plugin loads spatial tables and S
 
 Or install from ZIP: download [`databricks_dbsql_connector.zip`](https://github.com/danny-db/qgis-databricks-connector/releases/latest/download/databricks_dbsql_connector.zip) from the [Releases page](https://github.com/danny-db/qgis-databricks-connector/releases).
 
-New to the plugin? The **[user guide](docs/README.md)** walks through every feature step by step.
+New to the plugin? The **[user guide](https://danny-db.github.io/qgis-databricks-connector/)** walks through every feature step by step (also readable [here on GitHub](docs/README.md)).
 
 ## What you can do
 

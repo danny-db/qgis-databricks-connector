@@ -1,0 +1,87 @@
+# User guide site (GitHub Pages). Source: the Markdown pages in docs/.
+# Build locally:  pip install "mkdocs<2" "mkdocs-material>=9.5,<10" mdx-truly-sane-lists && mkdocs serve
+site_name: Databricks DBSQL Connector for QGIS
+site_description: Load Databricks data into QGIS, keep SQL layers live in your projects, ask Genie, and explain maps with frontier models on Databricks.
+site_url: https://danny-db.github.io/qgis-databricks-connector/
+repo_url: https://github.com/danny-db/qgis-databricks-connector
+repo_name: danny-db/qgis-databricks-connector
+edit_uri: edit/main/docs/
+copyright: MIT License · Not an official Databricks product
+
+docs_dir: docs
+exclude_docs: |
+  manual-test-plan-issue-3.md
+
+theme:
+  name: material
+  logo: assets/logo.svg
+  favicon: assets/logo.svg
+  palette:
+    - scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-night
+        name: Dark mode
+    - scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-sunny
+        name: Light mode
+  font:
+    text: Inter
+    code: JetBrains Mono
+  features:
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - navigation.footer
+    - navigation.instant
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.action.edit
+    - toc.follow
+
+hooks:
+  - mkdocs_hooks.py
+
+extra_css:
+  - assets/extra.css
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - mdx_truly_sane_lists:     # nested lists indented like on GitHub (2-3 spaces)
+      nested_indent: 3
+
+nav:
+  - Home: README.md
+  - Getting started:
+      - Install the plugin: 01-install.md
+      - Connect to Databricks: 02-connect.md
+      - Load spatial tables: 03-load-tables.md
+  - Working with your data:
+      - Browser panel: 04-browser-panel.md
+      - Live layers: 05-live-layers.md
+      - Custom SQL and saved queries: 06-custom-queries.md
+      - Basemaps and styling: 09-basemaps-and-styling.md
+  - AI and Genie:
+      - Genie Agent: 07-genie-agent.md
+      - Genie One: 08-genie-one.md
+      - Explain this Map: 12-explain-this-map.md
+  - Security:
+      - Security and privacy: 10-security-and-privacy.md
+  - Help:
+      - Troubleshooting: 11-troubleshooting.md
