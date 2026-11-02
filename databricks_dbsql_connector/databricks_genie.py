@@ -22,7 +22,7 @@ from qgis.PyQt.QtCore import (
     Qt, QThread, pyqtSignal, QSettings, QVariant, QDateTime, QDate, QTimer
 )
 from qgis.PyQt.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
+    QDialog, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QComboBox, QTableWidget, QTableWidgetItem,
     QMessageBox, QHeaderView, QTextBrowser, QApplication,
     QSizePolicy, QAbstractItemView, QFileDialog
@@ -40,6 +40,7 @@ from .databricks_auth import (
     connect_kwargs,
     get_bearer_token,
 )
+from .databricks_chat_input import ChatInput
 from .databricks_genie_charts import infer_spec, render_spec
 from .databricks_kernel import normalise_rows
 
@@ -494,7 +495,8 @@ class GenieDialog(QDialog):
 
     def _setup_ui(self):
         self.setWindowTitle("Databricks Genie Agent")
-        self.setMinimumSize(720, 560)
+        # Height left to the layout, so a long question makes the window taller
+        self.setMinimumWidth(720)
         self.resize(800, 620)
 
         root = QVBoxLayout(self)
@@ -551,26 +553,26 @@ class GenieDialog(QDialog):
         self.results_table.horizontalHeader().setStretchLastSection(True)
         root.addWidget(self.results_table, stretch=2)
 
-        # ── Row 3: Question input ─────────────────────────────────────────
+        # ── Row 3: Question input (grows with the text) ───────────────────
         q_row = QHBoxLayout()
-        q_row.addWidget(QLabel("Question:"))
-        self.question_edit = QLineEdit()
+        q_row.addWidget(QLabel("Question:"), 0, Qt.AlignmentFlag.AlignTop)
+        self.question_edit = ChatInput()
         self.question_edit.setPlaceholderText(
             "Ask a question about your data...")
-        self.question_edit.returnPressed.connect(self._on_ask_or_cancel)
+        self.question_edit.submitted.connect(self._on_ask_or_cancel)
         q_row.addWidget(self.question_edit)
 
         self.ask_btn = QPushButton("Ask")
         self.ask_btn.setAutoDefault(False)
         self.ask_btn.setDefault(False)
         self.ask_btn.clicked.connect(self._on_ask_or_cancel)
-        q_row.addWidget(self.ask_btn)
+        q_row.addWidget(self.ask_btn, 0, Qt.AlignmentFlag.AlignTop)
 
         self.clear_btn = QPushButton("Clear Chat")
         self.clear_btn.setAutoDefault(False)
         self.clear_btn.setDefault(False)
         self.clear_btn.clicked.connect(self._on_clear_chat)
-        q_row.addWidget(self.clear_btn)
+        q_row.addWidget(self.clear_btn, 0, Qt.AlignmentFlag.AlignTop)
         root.addLayout(q_row)
 
         # ── Row 4: Geometry + Layer + Copy SQL + Status ───────────────────

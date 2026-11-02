@@ -9,7 +9,7 @@
 ## Ask a question
 1. Open **Plugins → Databricks DBSQL Connector → Databricks Genie One**, or click the Genie lamp on the toolbar.
 2. **Connection:** pick a saved connection (OAuth or personal access token).
-3. Type in **Question**, e.g. *"Show monthly trip counts in samples.nyctaxi.trips as a bar chart"*, and click **Ask**.
+3. Type in **Question**, e.g. *"Show monthly trip counts in samples.nyctaxi.trips as a bar chart"*, and click **Ask** (or press Enter). The box grows as you type; press Shift+Enter for a new line.
 4. Watch Genie One's progress in the chat and status bar, e.g. *"Running SQL: SELECT …"*. Click **Cancel** to stop.
 5. The answer appears with **Genie One's chart** drawn where Genie places it, plus the result table.
 

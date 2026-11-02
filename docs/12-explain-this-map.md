@@ -33,7 +33,7 @@ Everything below is optional and remembered between sessions.
 |---|---|
 | **Model** | Pick any model on your workspace that can read images (Claude, GPT, Gemini, Llama and more). Only image-capable models are listed |
 | **Ask for** | Prompt presets: **Explain this map** · **Summary for a report** (one polished paragraph) · **Patterns and outliers** · **Title, caption and alt text** (for layouts and accessibility) · **Next analysis steps** (QGIS or Databricks SQL) |
-| **Options → Custom prompt** | Write your own instruction, e.g. *"Explain this map for a road safety committee in Victoria"*. Leave it empty to use the preset |
+| **Options → Custom prompt** | Write your own instruction, e.g. *"Explain this map for a road safety committee in Victoria"*. Leave it empty to use the preset. The box grows as you type, up to eight lines |
 | **Options → Include layer and style details** | Turn the map facts off to send only the image |
 | **Options → Image size** | Small (1024 px), Medium (1600 px, default) or Large (2048 px). Larger shows more detail and uses more tokens. Busy maps (for example a detailed basemap) are sent as JPEG so they always fit the model's image limit |
 | **Explain** | Capture the map again (after panning, restyling or changing options) and explain it |
@@ -41,7 +41,7 @@ Everything below is optional and remembered between sessions.
 ![Options open, with a custom prompt for a road safety committee and the model's three-bullet answer](images/09-explain-custom-prompt.png)
 
 ## After the answer
-- **Ask a follow-up** about the same map, e.g. *"Which areas should we prioritise?"*. The conversation continues with the same image.
+- **Ask a follow-up** about the same map, e.g. *"Which areas should we prioritise?"*, and click **Ask** (or press Enter; Shift+Enter starts a new line). The conversation continues with the same image.
 - **Copy** the explanation, or **Save...** it as Markdown with the map image beside it (`.md` + `.png`, or `.jpg` for busy maps), ready for a report or wiki.
 - The status line shows the model, tokens used and time taken.
 

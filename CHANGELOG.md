@@ -2,6 +2,12 @@
 
 What changed in each release of the QGIS Databricks DBSQL Connector, newest first. For how to use each feature, see the [user guide](docs/README.md).
 
+## v1.8.1
+
+- **Room for longer questions**: the **Question** box in Genie Agent and Genie One, and the follow-up box in Explain this Map, start two lines tall and grow with your text up to eight lines, then scroll. The Genie window grows taller if a long question needs the room
+- **Enter sends, Shift+Enter starts a new line**, so you can write and re-read a detailed question before you ask it
+- **Longer custom prompts**: the Explain this Map **Options → Custom prompt** box grows with your text up to eight lines too (Enter still starts a new line there)
+
 ## v1.8.0
 
 ### Lakehouse Real-Time warehouses

@@ -3,7 +3,7 @@ name=Databricks DBSQL Connector
 qgisMinimumVersion=3.16
 qgisMaximumVersion=4.99
 description=Connect QGIS to Databricks SQL warehouses and access geospatial data directly from Unity Catalog
-version=1.8.0
+version=1.8.1
 author=Danny Wong
 email=danny.wong@databricks.com
 
@@ -56,7 +56,13 @@ about=A QGIS plugin that provides direct connectivity to Databricks SQL warehous
     For installation instructions and documentation, visit the GitHub repository.
 
 # Changelog
-changelog=1.8.0 - Lakehouse Real-Time warehouses
+changelog=1.8.1 - Room for longer questions
+    - Improved: the Genie Agent and Genie One Question box and the Explain this Map
+      follow-up box grow with your text (up to eight lines, then scroll)
+    - Improved: Enter sends; Shift+Enter starts a new line
+    - Improved: the Explain this Map custom prompt grows with your text too
+
+    1.8.0 - Lakehouse Real-Time warehouses
     - New: connect to Lakehouse Real-Time SQL warehouses; every feature works on them
       (Discover Tables, Browser panel, Custom Query and Save in project, live layers,
       Update Layer Data, Genie, Explain this Map), with OAuth or a personal access token
