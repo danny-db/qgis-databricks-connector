@@ -7,7 +7,7 @@ Ask a **Genie Agent** (formerly a *Genie Space*) about your data in plain Englis
 ## Ask a question
 1. Open **Plugins → Databricks DBSQL Connector → Databricks Genie Agent**.
 2. **Connection:** pick a saved connection. **Genie Agent:** loads the agents you can use; pick one.
-3. Type in **Question**, e.g. *"Show monthly crash counts as a bar chart"*, and click **Ask** (or press Enter).
+3. Type in **Question**, e.g. *"Show monthly crash counts as a bar chart"*, and click **Ask** (or press Enter). The box grows as you type; press Shift+Enter for a new line.
 4. While Genie works you'll see *"Genie is thinking…"* with a timer. Click **Cancel** to stop.
 5. The answer appears in the chat:
    - **Text** with key numbers in bold.

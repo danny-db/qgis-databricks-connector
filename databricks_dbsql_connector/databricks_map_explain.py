@@ -10,6 +10,7 @@ preset or custom prompt, image size, and follow-up questions.
 """
 import base64
 import os
+import re
 import tempfile
 import time
 import urllib.parse
@@ -18,7 +19,7 @@ from qgis.PyQt.QtCore import Qt, QThread, QTimer, pyqtSignal, QSettings, QSize
 from qgis.PyQt.QtGui import QColor, QImage, QPainter, QPixmap
 from qgis.PyQt.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QDialog, QFileDialog, QGroupBox, QHBoxLayout,
-    QLabel, QLineEdit, QMessageBox, QPlainTextEdit, QPushButton, QSplitter, QTextBrowser,
+    QLabel, QMessageBox, QPushButton, QSplitter, QTextBrowser,
     QVBoxLayout,
 )
 from qgis.core import (
@@ -29,12 +30,19 @@ from qgis.core import (
 
 from .databricks_auth import AUTH_PAT, get_bearer_token, normalise_auth_method
 from . import databricks_ai_core as ai
+from .databricks_chat_input import ChatInput, GrowingTextEdit
 
 _SETTINGS = "DatabricksConnector/ExplainMap"
 _CONNECTIONS = "DatabricksConnector/Connections"
 IMAGE_SIZES = [("Small (1024 px)", 1024), ("Medium (1600 px)", 1600), ("Large (2048 px)", 2048)]
 _MAX_CLASSES = 12            # legend entries described per layer
 _COUNT_VISIBLE_LIMIT = 50000  # count features in view up to this many (local layers only)
+_MARKDOWN_SYNTAX = re.compile(r"([\\`*_{}\[\]()#+\-.!|<>~=])")
+
+
+def _markdown_literal(text):
+    """Text as typed, for the Markdown transcript: syntax escaped, line breaks kept."""
+    return _MARKDOWN_SYNTAX.sub(r"\\\1", text).replace("\n", "  \n")
 
 
 # ---------------------------------------------------------------------------
@@ -378,11 +386,10 @@ class ExplainMapDialog(QDialog):
         self.options_box.setCheckable(True)
         self.options_box.setChecked(False)
         opts = QVBoxLayout(self.options_box)
-        self.custom_prompt = QPlainTextEdit()
+        self.custom_prompt = GrowingTextEdit(min_lines=3)  # about the old fixed 70 px box
         self.custom_prompt.setPlaceholderText(
             "Custom prompt (optional). Leave empty to use the 'Ask for' preset.\n"
             "Example: Explain this map for a road safety committee in Victoria.")
-        self.custom_prompt.setMaximumHeight(70)
         self.custom_prompt.setPlainText(self.settings.value(f"{_SETTINGS}/custom_prompt", ""))
         opts.addWidget(self.custom_prompt)
         row = QHBoxLayout()
@@ -420,13 +427,13 @@ class ExplainMapDialog(QDialog):
         root.addWidget(split, 1)
 
         follow = QHBoxLayout()
-        self.follow_edit = QLineEdit()
+        self.follow_edit = ChatInput()
         self.follow_edit.setPlaceholderText("Ask a follow-up about this map...")
-        self.follow_edit.returnPressed.connect(self.ask_follow_up)
+        self.follow_edit.submitted.connect(self.ask_follow_up)
         follow.addWidget(self.follow_edit, 1)
         self.follow_btn = QPushButton("Ask")
         self.follow_btn.clicked.connect(self.ask_follow_up)
-        follow.addWidget(self.follow_btn)
+        follow.addWidget(self.follow_btn, 0, Qt.AlignmentFlag.AlignTop)
         root.addLayout(follow)
 
         bottom = QHBoxLayout()
@@ -562,7 +569,7 @@ class ExplainMapDialog(QDialog):
             return
         self.follow_edit.clear()
         self._history = ai.build_messages(None, None, None, history=self._history, follow_up=question)
-        self._transcript += f"\n\n---\n\n**You:** {question}\n\n"
+        self._transcript += f"\n\n---\n\n**You:** {_markdown_literal(question)}\n\n"
         self._start(self._config())
 
     def _start(self, config):
